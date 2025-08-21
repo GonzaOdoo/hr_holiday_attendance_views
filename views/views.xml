@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hr_leave_late_form_list" model="ir.ui.view">
+        <field name="name">hr.leave.late.form.list</field>
+        <field name="model">hr.leave.late.form</field>
+        <field name="arch" type="xml">
+            <list string="Formularios de Retardo">
+                <field name="attendance_id" string="Asistencia"/>
+                <field name="date_start" string="Fecha Ingreso"/>
+                <field name="date_end" string="Fecha Salida"/>
+                <field name="state" string="Estado"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hr_leave_late_form_form" model="ir.ui.view">
+        <field name="name">hr.leave.late.form.form</field>
+        <field name="model">hr.leave.late.form</field>
+        <field name="arch" type="xml">
+            <form string="Formulario de Retardo">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="attendance_id" string="Asistencia"/>
+                            <field name="date_start" string="Fecha de Ingreso" readonly="1"/>
+                            <field name="date_end" string="Fecha y Hora de Salida"/>
+                        </group>
+                        <group>
+                            <field name="state" string="Estado"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="note" string="Justificación" placeholder="Ingrese la justificación del retardo..." nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hr_leave_late_form" model="ir.actions.act_window">
+        <field name="name">Formularios de Retardo</field>
+        <field name="res_model">hr.leave.late.form</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_hr_leave_late_form_list"/>
+    </record>
+    <menuitem id="menu_hr_leave_late_form" 
+              name="Justificaciones" 
+              parent="studio_customization.asistencias_informac_d581d0c1-8639-463f-9fcd-dd23e63270b2" 
+              action="action_hr_leave_late_form" 
+              sequence="10"/>
+    <!-- Menú -->
+    
+</odoo>
