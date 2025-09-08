@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Formulario del Wizard -->
+    <record id="hr_payroll_report_wizard_form" model="ir.ui.view">
+        <field name="name">hr.payroll.report.wizard.form</field>
+        <field name="model">hr.payroll.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Generar Reporte de Nómina">
+                <group>
+                    <field name="lote" on_change="1"/>
+                </group>
+                <group string="Recibos de Nómina">
+                    <field name="slips" nolabel="1"/>
+                </group>
+                <footer>
+                    <button name="action_generate_report" type="object" string="Recibo de sueldo" class="btn-primary"/>
+                    <button name="generate_ips_text" type="object" string="IPS" class="btn-secondary"/>
+                    <button name="action_generate_attendancereport" type="object" string="Asistencia" class="btn-secondary"/>
+                    <button name="generate_ips_text" type="object" string="TXT Banco" class="btn-secondary"/>
+                    
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción para abrir el wizard -->
+    <record id="action_hr_payroll_report_wizard" model="ir.actions.act_window">
+        <field name="name">Reporte de Nómina Personalizado</field>
+        <field name="res_model">hr.payroll.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menú para el wizard -->
+    <menuitem
+        id="menu_hr_payroll_report_custom"
+        name="Exportación de archivos"
+        parent="hr_payroll.menu_hr_payroll_report"
+        action="action_hr_payroll_report_wizard"
+        sequence="10"
+    />
+</odoo>

@@ -104,7 +104,10 @@ class LeaveReportCalendar(models.Model):
                 if not record.attendance_id.check_out:
                     record.color = 1  # Rojo: aún no ha salido (en curso)
                 else:
-                    record.color = 0  # Verde: jornada completa
+                    if record.attendance_id.overtime_status == 'to_approve':
+                        record.color = 2
+                    else:
+                        record.color = 0  # Verde: jornada completa
             elif record.source == 'leave':
                 # Colorear ausencias por tipo
                 # Asignamos un color por tipo de ausencia (usa el ID o un hash)

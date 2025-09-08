@@ -16,7 +16,7 @@ class HrContract(models.Model):
         """
         # Filtrar contratos relevantes
         attendance_contracts = self.filtered(
-            lambda c: c.work_entry_source == 'attendance' and c.wage_type == 'hourly'
+            lambda c: c.work_entry_source == 'attendance'
         )
         if not attendance_contracts:
             return

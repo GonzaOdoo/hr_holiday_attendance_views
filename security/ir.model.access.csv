@@ -2,3 +2,4 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_hr_leave_late_form_user,hr.leave.late.form.user,model_hr_leave_late_form,base.group_user,1,1,1,0
 access_hr_leave_late_form_hr_user,hr.leave.late.form.hr.user,model_hr_leave_late_form,hr.group_hr_user,1,1,1,0
 access_hr_leave_late_form_manager,hr.leave.late.form.manager,model_hr_leave_late_form,hr.group_hr_manager,1,1,1,1
+access_hr_payroll_report_wizard_user,hr.payroll.report.wizard.user,model_hr_payroll_report_wizard,base.group_user,1,1,1,0
