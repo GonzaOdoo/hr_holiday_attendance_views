@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, Command
+from datetime import date,datetime
+from dateutil.relativedelta import relativedelta
 from odoo.exceptions import UserError
+import io
+import xlsxwriter
 import base64
 import logging
 _logger = logging.getLogger(__name__)
@@ -8,8 +12,35 @@ _logger = logging.getLogger(__name__)
 class HrContract(models.Model):
     _inherit = 'hr.payslip'
     
-    date_from_events = fields.Date('Inicio Novedades')
-    date_to_events = fields.Date('Fin Novedades')
+    date_from_events = fields.Date(
+        string='Inicio Novedades',
+        compute='_compute_date_events',
+        store=True,
+        readonly=False,
+    )
+    date_to_events = fields.Date(
+        string='Fin Novedades',
+        compute='_compute_date_events',
+        store=True,
+        readonly=False,
+    )
+
+    @api.depends('date_to')  # Solo depende de date_to, porque es nuestra referencia
+    def _compute_date_events(self):
+        for payslip in self:
+            if payslip.date_to:
+                # Fin de novedades: siempre el día 20 del mes de date_to
+                date_to_events = payslip.date_to.replace(day=20)
+
+                # Inicio de novedades: 21 del mes anterior
+                date_from_events = date_to_events - relativedelta(months=1)
+                date_from_events = date_from_events.replace(day=21)
+
+                payslip.date_from_events = date_from_events
+                payslip.date_to_events = date_to_events
+            else:
+                payslip.date_from_events = False
+                payslip.date_to_events = False
 
     @api.depends('employee_id', 'contract_id', 'struct_id', 'date_from', 'date_to', 'struct_id','date_from_events','date_to_events')
     def _compute_input_line_ids(self):
@@ -70,13 +101,14 @@ class HrContract(models.Model):
                 day_rounded = max(0, 30 - round(leave_days, 5))
             if work_entry_type.code in ['OVERTIME_EVENING','OVERTIME_NIGHT','OVERTIME']:
                 _logger.info("Overtime!")
-                days_rounded = 0
+                day_rounded = 0
             attendance_line = {
                 'sequence': work_entry_type.sequence,
                 'work_entry_type_id': work_entry_type_id,
                 'number_of_days': day_rounded,
                 'number_of_hours': hours,
             }
+            _logger.info(attendance_line)
             res.append(attendance_line)
 
         # Sort by Work Entry Type sequence
@@ -102,19 +134,23 @@ class HrContract(models.Model):
     ], string='Mes del período', default=_get_default_month)
 
     def format_amount(self, amount):
-        """Formatea un número como NN.NNN.NNN,DD"""
+        """Formatea un número como NN.NNN.NNN (SIN decimales, siempre)"""
         if amount is None:
-            return "0,00"
-        # Redondear a 2 decimales
-        amount = round(float(amount), 2)
-        # Convertir a string y separar parte entera y decimal
-        integer_part, decimal_part = f"{amount:.2f}".split('.')
-        # Formatear miles con puntos
-        integer_part = "{:,}".format(int(integer_part)).replace(",", ".")
-        # Unir con coma
-        return f"{integer_part},{decimal_part}"
+            return "0"
+        # Redondear al entero más cercano (o puedes usar int(amount) para truncar)
+        amount = round(float(amount))  # Usa int(amount) si prefieres truncar en vez de redondear
+        # Formatear con separadores de miles
+        return "{:,}".format(int(amount)).replace(",", ".")
 
-
+    def format_amount2(self, amount):
+        """Formatea un número como NN.NNN.NNN (SIN decimales, siempre)"""
+        if amount is None:
+            return "0"
+        # Redondear al entero más cercano (o puedes usar int(amount) para truncar)
+        amount = round(float(amount))  # Usa int(amount) si prefieres truncar en vez de redondear
+        # Formatear con separadores de miles
+        return "{:,}".format(int(amount)).replace(",", ".")
+    
     def generate_ips_text(self):
         """
         Genera un archivo .txt en formato IPS con campos de ancho fijo.
@@ -199,6 +235,253 @@ class HrContract(models.Model):
         })
     
         # Devolver acción de descarga
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+
+    def generate_payslip_pivot_excel_report(self):
+        # Soporta múltiples recibos
+        if not self:
+            return
+    
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+        worksheet = workbook.add_worksheet('Nómina por Concepto')
+    
+        # Formatos
+        header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#16365C',
+            'font_color': 'white',
+            'border': 1,
+        })
+        text_format = workbook.add_format({'border': 1, 'align': 'left'})
+        amount_format = workbook.add_format({'num_format': '#,##0.00', 'border': 1, 'align': 'right'})
+        date_format = workbook.add_format({'num_format': 'dd/mm/yyyy', 'border': 1})
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'left',
+        })
+    
+        # Título
+        current_row = 0
+        worksheet.write(current_row, 0, 'Reporte de Nómina - Formato Pivotado', title_format)
+        current_row += 2
+    
+        # === Mapeo personalizado: código de entrada → código de línea salarial ===
+        CUSTOM_MAPPING = {
+            'LATE': 'LATE',
+            'WORK100': 'BASIC',
+            'GUARD_DIURNA': 'GUARD_ASIG',
+            'GUARD_NOCHE': 'GUARD_ASIG_NOCHE',
+            # Agrega aquí más mapeos según necesites
+        }
+    
+        # === Paso 1: Recolectar todos los conceptos únicos ===
+        concept_info = {}  # {code: {name, sequence, type, mapped, salary_code, handled_by_mapping}}
+    
+        # 1. worked_days_line_ids
+        all_worked_days = self.mapped('worked_days_line_ids')
+        for wd in all_worked_days:
+            if wd.code and wd.code not in concept_info:
+                concept_info[wd.code] = {
+                    'name': wd.work_entry_type_id.name,
+                    'sequence': (wd.sequence or 100) - 1000,
+                    'type': 'worked_days',
+                    'mapped': False,
+                    'salary_code': None,
+                    'handled_by_mapping': False
+                }
+    
+        # 2. input_line_ids
+        all_inputs = self.mapped('input_line_ids')
+        for inp in all_inputs:
+            if inp.code and inp.code not in concept_info:
+                concept_info[inp.code] = {
+                    'name': inp.name,
+                    'sequence': (inp.sequence or 500) - 500,
+                    'type': 'input',
+                    'mapped': False,
+                    'salary_code': None,
+                    'handled_by_mapping': False
+                }
+    
+        # 3. line_ids — procesar mapeos y marcar como manejados
+        all_salary_lines = self.mapped('line_ids')
+        reverse_mapping = {v: k for k, v in CUSTOM_MAPPING.items()}  # salary_code → input_code
+    
+        for line in all_salary_lines:
+            if not line.code:
+                continue
+    
+            # Si este código de salario está mapeado desde un concepto de entrada
+            if line.code in reverse_mapping:
+                input_code = reverse_mapping[line.code]
+    
+                # ¡SIEMPRE marcar este código de salario como manejado por mapeo!
+                if line.code not in concept_info:
+                    concept_info[line.code] = {
+                        'name': line.name,  # ¡Usamos el nombre ORIGINAL de la línea, no el del concepto!
+                        'sequence': line.sequence if line.sequence is not None else 99999,
+                        'type': 'salary',
+                        'mapped': True,
+                        'salary_code': None,
+                        'handled_by_mapping': True
+                    }
+                else:
+                    concept_info[line.code]['mapped'] = True
+                    concept_info[line.code]['handled_by_mapping'] = True
+                    concept_info[line.code]['name'] = line.name  # Aseguramos nombre original
+    
+                # Si el concepto de entrada existe, lo marcamos como mapeado
+                if input_code in concept_info:
+                    concept_info[input_code]['mapped'] = True
+                    concept_info[input_code]['salary_code'] = line.code
+    
+            # Si coincide directamente con un concepto de entrada
+            if line.code in concept_info and concept_info[line.code]['type'] in ['worked_days', 'input']:
+                concept_info[line.code]['mapped'] = True
+    
+            # Agregar como línea independiente solo si NO está manejada y NO existe ya
+            is_handled = concept_info.get(line.code, {}).get('handled_by_mapping', False)
+            is_already_added = line.code in concept_info and concept_info[line.code]['type'] == 'salary'
+    
+            if not is_handled and not is_already_added:
+                concept_info[line.code] = {
+                    'name': line.name,
+                    'sequence': line.sequence if line.sequence is not None else 99999,
+                    'type': 'salary',
+                    'mapped': False,
+                    'salary_code': None,
+                    'handled_by_mapping': False
+                }
+    
+        # === Paso 2: Generar lista de códigos para columnas (excluir líneas de salario manejadas) ===
+        sorted_codes = sorted(
+            [
+                code for code in concept_info.keys()
+                if not (concept_info[code]['type'] == 'salary' and concept_info[code].get('handled_by_mapping', False))
+            ],
+            key=lambda code: concept_info[code]['sequence']
+        )
+    
+        # Generar encabezados dinámicos
+        dynamic_headers = []
+        code_to_col_info = {}
+    
+        col_index = 0
+        for code in sorted_codes:
+            info = concept_info[code]
+            base_name = info['name']
+    
+            if info['type'] in ['worked_days', 'input']:
+                dynamic_headers.append(f"{base_name} (Valor)")
+                dynamic_headers.append(f"{base_name} (Monto)")
+                code_to_col_info[code] = {
+                    'value_col': col_index,
+                    'amount_col': col_index + 1,
+                    'is_input': True
+                }
+                col_index += 2
+            else:
+                dynamic_headers.append(base_name)
+                code_to_col_info[code] = {
+                    'amount_col': col_index,
+                    'is_input': False
+                }
+                col_index += 1
+    
+        # === Paso 3: Escribir cabeceras ===
+        fixed_headers = ['Empleado', 'N° Recibo', 'Fecha Desde', 'Fecha Hasta']
+        final_headers = fixed_headers + dynamic_headers + ['Total Neto', 'Estado']
+    
+        for col, header in enumerate(final_headers):
+            worksheet.write(current_row, col, header, header_format)
+    
+        current_row += 1
+    
+        # === Paso 4: Escribir datos de cada recibo ===
+        for slip in self:
+            row_data = [
+                slip.employee_id.name or '',
+                slip.number or '',
+                slip.date_from,
+                slip.date_to,
+            ]
+    
+            # Diccionarios por código
+            wd_dict = {wd.code: wd.number_of_days or wd.number_of_hours for wd in slip.worked_days_line_ids}
+            input_dict = {inp.code: inp.amount for inp in slip.input_line_ids}
+            salary_dict = {line.code: line.amount for line in slip.line_ids}
+    
+            # Llenar columnas
+            for code in sorted_codes:
+                info = concept_info[code]
+                if info['type'] in ['worked_days', 'input']:
+                    # Valor
+                    value = wd_dict.get(code, 0.0) if info['type'] == 'worked_days' else input_dict.get(code, 0.0)
+                    row_data.append(value)
+                    # Monto (usando mapeo si existe)
+                    mapped_code = CUSTOM_MAPPING.get(code, code)
+                    amount = salary_dict.get(mapped_code, 0.0)
+                    row_data.append(amount)
+                else:
+                    # Línea de salario independiente
+                    amount = salary_dict.get(code, 0.0)
+                    row_data.append(amount)
+    
+            # Total neto y estado
+            net_line = slip.line_ids.filtered(lambda l: l.code == 'NET')
+            net_amount = net_line[0].amount if net_line else 0.0
+            row_data.append(net_amount)
+            row_data.append(dict(slip._fields['state'].selection).get(slip.state, slip.state))
+    
+            # Escribir fila
+            for col, value in enumerate(row_data):
+                if isinstance(value, (date, datetime)):
+                    worksheet.write(current_row, col, value, date_format)
+                elif isinstance(value, (float, int)):
+                    worksheet.write(current_row, col, value, amount_format)
+                else:
+                    worksheet.write(current_row, col, str(value) if value != "" else "", text_format)
+    
+            current_row += 1
+    
+        # Ajustar anchos
+        worksheet.set_column('A:A', 25)   # Empleado
+        worksheet.set_column('B:B', 15)   # N° Recibo
+        worksheet.set_column('C:D', 12)   # Fechas
+        worksheet.set_column('E:ZZ', 18)  # Conceptos
+    
+        workbook.close()
+        output.seek(0)
+        file_data = base64.b64encode(output.read())
+        output.close()
+    
+        # Nombre del archivo
+        if len(self) == 1:
+            date_str = self.date_from.strftime('%Y%m%d') if self.date_from else 'sin_fecha'
+            filename = f"Recibo_Pivot_{self.number or 'SIN_NUMERO'}_{date_str}.xlsx"
+        else:
+            date_str = fields.Date.today().strftime('%Y%m%d')
+            filename = f"Nomina_Pivot_{len(self)}_registros_{date_str}.xlsx"
+    
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': file_data,
+            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'res_model': self._name,
+            'res_id': self.id if len(self) == 1 else False,
+            'public': False,
+        })
+    
         return {
             'type': 'ir.actions.act_url',
             'url': f'/web/content/{attachment.id}?download=true',

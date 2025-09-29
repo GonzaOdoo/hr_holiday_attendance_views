@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="model_hr_leave_form_access" model="ir.model">
+        <field name="model">hr.leave</field>
+        <!-- Agregamos tipo_enfermedad a los campos permitidos en formularios web -->
+        <field name="website_form_access_field_ids"
+               eval="[(4, ref('model_hr_leave.field_hr_leave__tipo_enfermedad'))]"/>
+    </record>
+</odoo>

@@ -35,15 +35,14 @@ class LeaveReportCalendar(models.Model):
                 hl.holiday_status_id AS holiday_status_id,
                 em.company_id AS company_id,
                 em.job_id AS job_id,
-                COALESCE(rr.tz, rc.tz, cc.tz, 'UTC') AS tz,
+                COALESCE(rr.tz, co_partner.tz, 'UTC') AS tz,  -- ← Corregido
                 hl.state = 'refuse' AS is_striked,
                 hl.state NOT IN ('validate', 'refuse') AS is_hatched
             FROM hr_leave hl
             LEFT JOIN hr_employee em ON em.id = hl.employee_id
             LEFT JOIN resource_resource rr ON rr.id = em.resource_id
-            LEFT JOIN resource_calendar rc ON rc.id = em.resource_calendar_id
             LEFT JOIN res_company co ON co.id = em.company_id
-            LEFT JOIN resource_calendar cc ON cc.id = co.resource_calendar_id
+            LEFT JOIN res_partner co_partner ON co_partner.id = co.partner_id  -- ← Nuevo JOIN
             WHERE hl.state IN ('confirm', 'validate', 'validate1', 'refuse')
     
             UNION ALL

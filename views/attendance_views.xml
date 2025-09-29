@@ -1,0 +1,116 @@
+<odoo>
+    <record id="view_hr_attendance_form_inherit_late_check" model="ir.ui.view">
+        <field name="name">hr.attendance.form.inherit.late.check</field>
+        <field name="model">hr.attendance</field>
+        <field name="inherit_id" ref="hr_attendance.hr_attendance_view_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Insertamos dentro del grupo "check_in_group", al final -->
+            <xpath expr="//group[@name='check_in_group']" position="inside">
+                <group string="Puntualidad" colspan="2">
+                    <field name="scheduled_check_in" widget="datetime" readonly="1"/>
+                    <label for="late_minutes"/>
+                    <div class="o_row">
+                        <field name="late_minutes" class="o_hr_narrow_field-4" widget="float_time" string="Minutos Tarde" readonly="late_status == 'refused'"/>
+                        <button class="oe_stat_button" string="Aprobar" icon="fa-check" type="object" name="action_approve_late" 
+                                invisible="late_status not in ['to_approve', 'refused'] or not is_late"/>
+                        <button class="oe_stat_button" string="Rechazar" icon="fa-times" type="object" name="action_refuse_late"
+                                invisible="late_status not in ['to_approve', 'approved'] or not is_late"/>
+                    </div>
+                    <field name="is_late" widget="boolean_toggle" readonly="1" invisible="1"/>
+                </group>
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="view_hr_attendance_tree_late" model="ir.ui.view">
+        <field name="name">hr.attendance.tree.late</field>
+        <field name="model">hr.attendance</field>
+        <field name="arch" type="xml">
+            <list string="Llegadas Tardías" create="0" multi_edit="1">
+                <!-- Header con botones para selección múltiple -->
+                <header>
+                    <button string="Aprobar" name="action_approve_late" type="object" class="btn-primary"/>
+                    <button string="Rechazar" name="action_refuse_late" type="object" class="btn-secondary"/>
+                </header>
+
+                <!-- Columnas -->
+                <field name="employee_id" widget="many2one_avatar_user"/>
+                <field name="check_in"/>
+                <field name="check_out"/>
+                <field name="late_minutes" widget="float_time" string="Minutos Tarde"/>
+                <field name="confirmed_late_minutes" widget="float_time" string="Confirmados" readonly="late_status == 'refused'"/>
+                <field name="late_status" widget="badge"
+                       decoration-warning="late_status == 'to_approve'"
+                       decoration-success="late_status == 'approved'"
+                       decoration-danger="late_status == 'refused'"/>
+
+                <!-- Botones inline por registro -->
+                <button name="action_approve_late" type="object" string="Approve" icon="fa-check"
+                        invisible="late_status not in ['to_approve', 'refused'] or not is_late"
+                        class="oe_stat_button"/>
+                <button name="action_refuse_late" type="object" string="Refuse" icon="fa-times"
+                        invisible="late_status not in ['to_approve', 'approved'] or not is_late"
+                        class="oe_stat_button"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="hr_attendance_late_search_view" model="ir.ui.view">
+        <field name="name">hr.attendance.late.search</field>
+        <field name="model">hr.attendance</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Llegadas Tardías">
+                <field name="employee_id" string="Empleado"/>
+                <field name="check_in"/>
+                <field name="check_out"/>
+    
+                <!-- Filtros por estado de retraso -->
+                <filter name="to_approve_late" string="Por Aprobar" domain="[('late_status', '=', 'to_approve')]"/>
+                <filter name="approved_late" string="Aprobados" domain="[('late_status', '=', 'approved')]"/>
+                <filter name="refused_late" string="Rechazados" domain="[('late_status', '=', 'refused')]"/>
+    
+                <!-- Agrupar por empleado -->
+                <filter name="group_by_employee" string="Empleado" context="{'group_by': 'employee_id'}"/>
+    
+                <!-- Filtro por empleados activos -->
+                <filter name="activeemployees" string="Empleados Activos" domain="[('employee_id.active', '=', True)]"/>
+    
+                <separator/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="group_by_date" string="Fecha" context="{'group_by': 'check_in:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    
+    <record id="action_hr_attendance_late_management" model="ir.actions.act_window">
+        <field name="name">Gestión de Llegadas Tardías</field>
+        <field name="res_model">hr.attendance</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_late', '=', True), ('check_out', '!=', False)]</field>
+        <field name="context">{
+            "search_default_to_approve_late": 1,
+            "search_default_activeemployees": 1,
+        }</field>
+        <field name="view_id" ref="view_hr_attendance_tree_late"/>
+        <field name="search_view_id" ref="hr_attendance_late_search_view"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">
+                No se encontraron llegadas tardías pendientes de aprobación.
+            </p>
+            <p>
+                Aquí se muestran las llegadas tardías que requieren validación por parte del manager.
+            </p>
+        </field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem id="menu_hr_attendance_late_management"
+          name="Llegadas Tardías"
+          parent="hr_attendance.menu_hr_attendance_root"
+          action="action_hr_attendance_late_management"
+          sequence="20"/>
+    
+</odoo>

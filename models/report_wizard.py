@@ -18,6 +18,11 @@ class HrPayrollReport(models.Model):
         'hr.payslip',
         compute='_compute_available_slips'
     )
+    report_type = fields.Selection([
+        ('salary', 'Liquidación de Salario'),
+        ('bonus', 'Aguinaldo'),
+        ('vacation', 'Vacaciones'),
+    ], string='Tipo de Reporte',default='salary', required=True)
 
     @api.onchange('lote')
     def _onchange_lote(self):
@@ -45,7 +50,12 @@ class HrPayrollReport(models.Model):
     
         if not payslips:
             raise UserError("No hay nóminas para generar el archivo.")
-    
+        company = payslips[0].company_id if payslips else self.env.company
+        # Validar que los campos existan en la compañía
+        if not company.ips:
+            raise UserError("La compañía no tiene configurado el campo 'Número Patronal IPS'.")
+        if not company.mtess:
+            raise UserError("La compañía no tiene configurado el campo 'Número MTSS'.")
         file_name = "reporte_ips.txt"
         lines = []
     
@@ -67,8 +77,8 @@ class HrPayrollReport(models.Model):
                 raise UserError(f"Empleado {employee.name} no tiene número de cédula.")
     
             # === Campos del formato IPS ===
-            numero_patronal = "1234567890"  # ← Reemplaza con valor real desde compañía
-            numero_asegurado = "0000000000"  # ← Puede venir del contrato o empleado
+            numero_patronal = company.ips  # ← Reemplaza con valor real desde compañía
+            numero_asegurado = company.mtess  # ← Puede venir del contrato o empleado
     
             # Formateo de campos con ancho fijo
             cedula = str(employee.identification_id or "").strip()[:10].ljust(10)
@@ -143,21 +153,31 @@ class HrPayrollReport(models.Model):
                     real = line.amount
     
             # Formateo de campos con ancho fijo
-            ci = str(employee.identification_id or "").strip()[:10]
-            debito = ""
-            concepto = ""
-            salario_imponible = f"{imponible:010.2f}".replace('.', '')[:10].zfill(10)  # Ej: 000150000 → 1500.00
+            ci = str(employee.identification_id or "").strip()
+            debito =  str(employee.bank_account_id.acc_number or "")
+            concepto = "15"
+            salario_imponible = f"{imponible:010.2f}".replace('.', '') # Ej: 000150000 → 1500.00
             aguinaldo = f"NO"  # MMYYYY
-            fecha_pago = ""
-    
+            fecha_pago = record.paid_date
+            dias_semana = {
+                0: "lunes",
+                1: "martes",
+                2: "miércoles",
+                3: "jueves",
+                4: "viernes",
+                5: "sábado",
+                6: "domingo"
+            }
+            nombre_dia = dias_semana[fecha_pago.weekday()]
+            fecha_formateada = f"{fecha_pago.day:02d}/{fecha_pago.month:02d}/{nombre_dia}"
             # Construir línea
             line = (
-                ci + "," +
-                debito + "," +
-                concepto + ","+
-                salario_imponible + "," +
-                aguinaldo + "," +
-                fecha_pago
+                '"' + ci + '"' + "," +
+                '"' + debito + '"' + "," +
+                '"' + concepto + '"' + "," +
+                '"' + salario_imponible + '"' + "," +
+                '"' + aguinaldo + '"' + "," +
+                '"' + fecha_formateada + '"'
             )
             lines.append(line)
              # Generar contenido
@@ -182,13 +202,22 @@ class HrPayrollReport(models.Model):
             'url': f'/web/content/{attachment.id}?download=true',
             'target': 'self',
         }
-    
     def action_generate_report(self):
+        self.ensure_one()
+        if self.report_type == 'bonus':
+            report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page_bonus'
+        elif self.report_type == 'vacation':
+            report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page_holiday'
+        else:
+            report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page'
+        return self.env.ref(report_ref).report_action(self.slips)
+    def action_generate_report2(self):
         self.ensure_one()
         if not self.slips:
             raise UserError("No hay recibos seleccionados para imprimir.")
     
         # Pasamos los slips al reporte
+        #return self.env.ref('__export__.ir_act_report_xml_1086_d40b2ab8').report_action(self.slips)
         return self.env.ref('hr_holiday_attendance_views.action_report_payslip_two_per_page').report_action(self.slips)
 
 

@@ -13,6 +13,8 @@ class HrPayslipWorkedDays(models.Model):
         guard_day_type = self.env['hr.work.entry.type'].search([('code', '=', 'GUARD_EVENING')], limit=1)
         guard_night_type = self.env['hr.work.entry.type'].search([('code', '=', 'GUARD_NIGHT')], limit=1)
         regular_work_type = self.env['hr.work.entry.type'].search([('code', '=', 'WORK100')], limit=1)
+        late_type = self.env['hr.work.entry.type'].search([('code', '=', 'LATE')], limit=1)
+        leave_types = self.env['hr.work.entry.type'].search([('is_leave', '=', True)])
         # Estructuras a excluir (ej. US)
         us_structures = self.env['hr.payroll.structure'].search([('code', '=', 'USMONTHLY')])
 
@@ -20,6 +22,8 @@ class HrPayslipWorkedDays(models.Model):
         special_worked_days = self.env['hr.payslip.worked_days']
         other_worked_days = self.env['hr.payslip.worked_days']
         regular_worked_days = self.env['hr.payslip.worked_days']
+        late_worked_days = self.env['hr.payslip.worked_days']
+        leave_worked_days = self.env['hr.payslip.worked_days']
         for wd in self:
             if wd.payslip_id.struct_id in us_structures:
                 other_worked_days |= wd
@@ -33,12 +37,29 @@ class HrPayslipWorkedDays(models.Model):
             # Verificar si es uno de nuestros tipos especiales
             if wd.work_entry_type_id in (overtime_day_type, overtime_night_type, guard_day_type, guard_night_type):
                 special_worked_days |= wd
+            elif wd.work_entry_type_id == late_type:
+                late_worked_days |= wd
             elif wd.work_entry_type_id == regular_work_type:
                 regular_worked_days |= wd
+            elif wd.work_entry_type_id in leave_types:  # <-- NUEVO
+                leave_worked_days |= wd
             else:
                 other_worked_days |= wd
 
         # === Calcular montos para casos especiales (horas extras y guardias) ===
+        for wd in leave_worked_days:
+            contract = wd.payslip_id.contract_id
+            days = wd.number_of_days  # ¡Importante! Usar días, no horas
+        
+            if not contract or wd.payslip_id.wage_type != 'monthly':
+                wd.amount = 0.0
+                continue
+        
+            # Calcular tasa diaria: salario mensual / 30
+            daily_rate = contract.wage / 30.0
+            wd.amount = daily_rate * days
+        
+            _logger.info(f"Ausencia {wd.work_entry_type_id.name}: {days} días → Monto = {wd.amount:.2f} (tasa diaria: {daily_rate:.2f})")
         for wd in special_worked_days:
             contract = wd.payslip_id.contract_id
             hours = wd.number_of_hours
@@ -86,7 +107,30 @@ class HrPayslipWorkedDays(models.Model):
 
             wd.amount = amount
             _logger.info(wd.amount)
-            
+        # === Calcular deducción por retrasos confirmados ===
+        for wd in late_worked_days:
+            contract = wd.payslip_id.contract_id
+            hours = wd.number_of_hours
+            if not contract:
+                wd.amount = 0.0
+                continue
+
+            # Calcular tarifa por hora (igual que en otros casos)
+            hourly_rate = 0.0
+            if wd.payslip_id.wage_type == 'hourly':
+                hourly_rate = contract.hourly_wage
+            elif wd.payslip_id.wage_type == 'monthly':
+                daily_hours = 8
+                monthly_days = 30
+                hourly_rate = contract.wage / (monthly_days * daily_hours)
+            else:
+                wd.amount = 0.0
+                continue
+
+            # Aplicar deducción: horas de retraso * tarifa por hora (negativo)
+            wd.amount = - (hourly_rate * hours)
+
+            _logger.info(f"Deducción por retraso confirmado: {wd.amount} ({hours} horas a {hourly_rate}/h)")
         for wd in regular_worked_days:
             contract = wd.payslip_id.contract_id
             hours = wd.number_of_hours
