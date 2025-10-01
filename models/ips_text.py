@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, Command
-from datetime import date,datetime
+from datetime import date,datetime,timedelta
 from dateutil.relativedelta import relativedelta
 from odoo.exceptions import UserError
 import io
@@ -41,6 +41,82 @@ class HrContract(models.Model):
             else:
                 payslip.date_from_events = False
                 payslip.date_to_events = False
+                
+    @api.depends('contract_id', 'struct_id')
+    def _compute_date_from(self):
+        for payslip in self:
+            if self.env.context.get('default_date_from'):
+                payslip.date_from = self.env.context.get('default_date_from')
+            else:
+                # Si la estructura es anual, sugerir 1 de enero del año actual
+                if payslip.struct_id and payslip.struct_id.schedule_pay == 'annually':
+                    today = fields.Date.today()
+                    payslip.date_from = today.replace(month=1, day=1)
+                else:
+                    payslip.date_from = payslip._get_schedule_period_start()
+
+    def _get_schedule_timedelta(self):
+        self.ensure_one()
+        # Prioriza struct_id.schedule_pay; si no está, usa el del contrato o el tipo de estructura
+        schedule = self.struct_id.schedule_pay or \
+                   (self.contract_id.schedule_pay if self.contract_id else False) or \
+                   (self.contract_id.structure_type_id.default_schedule_pay if self.contract_id and self.contract_id.structure_type_id else False)
+
+        # Si aún no hay schedule, usa 'monthly' como fallback
+        if not schedule:
+            schedule = 'monthly'
+
+        if schedule == 'quarterly':
+            timedelta = relativedelta(months=3, days=-1)
+        elif schedule == 'semi-annually':
+            timedelta = relativedelta(months=6, days=-1)
+        elif schedule == 'annually':
+            timedelta = relativedelta(years=1, days=-1)
+        elif schedule == 'weekly':
+            timedelta = relativedelta(days=6)
+        elif schedule == 'bi-weekly':
+            timedelta = relativedelta(days=13)
+        elif schedule == 'semi-monthly':
+            # Para semi-monthly, el cálculo depende del día de date_from
+            if not self.date_from:
+                # Si no hay date_from, no podemos calcular; devolvemos 0 días
+                timedelta = relativedelta(days=0)
+            else:
+                # Primera quincena: del 1 al 15; segunda: del 16 al último día del mes
+                if self.date_from.day <= 15:
+                    # Finaliza el 15
+                    timedelta = relativedelta(day=15)
+                else:
+                    # Finaliza el último día del mes
+                    timedelta = relativedelta(day=31)
+        elif schedule == 'bi-monthly':
+            timedelta = relativedelta(months=2, days=-1)
+        elif schedule == 'daily':
+            timedelta = relativedelta(days=0)
+        else:  # monthly por defecto
+            timedelta = relativedelta(months=1, days=-1)
+        return timedelta
+
+    @api.depends('date_from', 'contract_id', 'struct_id')
+    def _compute_date_to(self):
+        for payslip in self:
+            if self.env.context.get('default_date_to'):
+                payslip.date_to = self.env.context.get('default_date_to')
+            else:
+                if payslip.date_from:
+                    payslip.date_to = payslip.date_from + payslip._get_schedule_timedelta()
+                else:
+                    payslip.date_to = False
+
+            # Ajustar date_to si excede la fecha de fin del contrato
+            if payslip.contract_id and payslip.contract_id.date_end and payslip.date_from \
+                    and payslip.date_from >= payslip.contract_id.date_start \
+                    and payslip.date_from < payslip.contract_id.date_end \
+                    and payslip.date_to and payslip.date_to > payslip.contract_id.date_end:
+                payslip.date_to = payslip.contract_id.date_end
+
+
+    
 
     @api.depends('employee_id', 'contract_id', 'struct_id', 'date_from', 'date_to', 'struct_id','date_from_events','date_to_events')
     def _compute_input_line_ids(self):
@@ -59,10 +135,11 @@ class HrContract(models.Model):
                     slip.date_to_events = slip.date_to
                 valid_attachments = slip.employee_id.salary_attachment_ids.filtered(
                     lambda a: a.state == 'open'
-                        and a.date_start <= slip.date_to_events
-                        and (not a.date_end or a.date_end >= slip.date_from_events)
+                        and a.date_start >= slip.date_from_events
+                        and (not a.date_end or a.date_end <= slip.date_to_events)
                         and (not a.other_input_type_id.struct_ids or slip.struct_id in a.other_input_type_id.struct_ids)
                 )
+                _logger.info(valid_attachments)
                 # Only take deduction types present in structure
                 for input_type_id, attachments in valid_attachments.grouped("other_input_type_id").items():
                     amount = attachments._get_active_amount()
@@ -114,6 +191,9 @@ class HrContract(models.Model):
         # Sort by Work Entry Type sequence
         work_entry_type = self.env['hr.work.entry.type']
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
+
+
+
     
     def _get_default_month(self):
         return fields.Date.context_today(self).strftime('%m')
@@ -480,6 +560,183 @@ class HrContract(models.Model):
             'res_model': self._name,
             'res_id': self.id if len(self) == 1 else False,
             'public': False,
+        })
+    
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+
+    def generate_ministerio_planilla_excel_report(self):
+        if not self:
+            return
+    
+        # Validar que todos los payslips sean del mismo mes y empleador
+        company = self[0].company_id
+        date_from = self[0].date_from
+        date_to = self[0].date_to
+        year = date_from.year
+        month = date_from.strftime('%B').capitalize()
+    
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+        worksheet = workbook.add_worksheet('Planilla Mensual')
+    
+        # Configurar hoja A4 horizontal
+        worksheet.set_landscape()
+        worksheet.set_paper(9)  # A4
+    
+        # Formatos
+        bold = workbook.add_format({'bold': True})
+        bold_center = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter'})
+        center = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+        normal = workbook.add_format({'border': 1})
+        footer = workbook.add_format({'italic': True})
+    
+        # ===== ENCABEZADO =====
+        worksheet.merge_range('A1:K1', f'Razon Social: {company.name}', bold)
+        worksheet.merge_range('L1:R1', 'Nro.Patronal IPS:', bold)
+    
+        worksheet.merge_range('A2:K2', f'Empleador: {company.name}', bold)
+        worksheet.merge_range('L2:R2', 'Nro.Patronal MTESS:', bold)
+    
+        worksheet.merge_range('A3:K3', 'Actividad: Analisis Clinicos', bold)  # Ajustar si necesario
+        worksheet.merge_range('L3:R3', f'RUC: {company.vat or ""}', bold)
+    
+        worksheet.merge_range('A4:K4', f'Domicilio: {company.street or ""}', bold)
+        worksheet.merge_range('L4:R4', f'Telefono: {company.phone or ""}', bold)
+    
+        worksheet.write('A5', 'Año:', bold)
+        worksheet.write('B5', str(year), bold)
+        worksheet.merge_range('L5:R5', 'Pagina:', bold)
+    
+        worksheet.write('A6', 'Mes:', bold)
+        worksheet.write('B6', month, bold)
+        worksheet.merge_range('L6:R6', f'Correo: {company.email or ""}', bold)
+    
+        # Salto visual
+        current_row = 8
+    
+        # ===== ENCABEZADOS DE COLUMNA =====
+        day_headers = [str(d) for d in range(1, 32)]  # '1' a '31'
+        main_headers = ['Nro. Orden', 'C.I.', 'Apellidos y Nombre'] + day_headers + [
+            'SALARIO', 'TOTAL', 'HORAS EXTRAS', '', '', 'BENEFICIOS SOCIALES', '', '', '', 'Total General'
+        ]
+        sub_headers = ['', '', ''] + [''] * 31 + [
+            'Importe Unitario', 'Dia Trab.', 'Hora Trab.', 'Importe',
+            'Cant. 50%', 'Cant. 100%', 'Cant. 130%',
+            'Importe 50%', 'Importe 100%', 'Importe 130%',
+            'Vacacion', 'Bonificacion Familiar', 'Aguinaldo', 'Otros Beneficios',
+            'Forma Pago'
+        ]
+    
+        # Escribir encabezados
+        for col, val in enumerate(main_headers):
+            worksheet.write(current_row, col, val, bold_center)
+        current_row += 1
+        for col, val in enumerate(sub_headers):
+            worksheet.write(current_row, col, val, bold_center)
+        current_row += 1
+    
+        # Ajustar ancho de columnas
+        for i in range(len(main_headers)):
+            worksheet.set_column(i, i, 4)
+    
+        # ===== MAPEO DE CÓDIGOS (ajusta según tus reglas salariales) =====
+        CODE_MAP = {
+            'VACACIONES': 'V',
+            'FERIADO': 'F',
+            'DOMINGO': 'D',
+            'PERMISO': 'P',
+            'REPOSO': 'R',
+            # Agrega más si usas otros códigos
+        }
+    
+        # Función auxiliar: determinar código para un día
+        def get_day_code(payslip, day_date):
+            # Buscar en worked_days_line_ids
+            
+            return ''  # Ausente o no registrado
+    
+        # ===== DATOS DE EMPLEADOS =====
+        for idx, slip in enumerate(self, 1):
+            employee = slip.employee_id
+            ci = employee.identification_id or ''
+            name = employee.name or ''
+    
+            # Rellenar días del mes
+            days_data = []
+            current = date_from
+            while current <= date_to:
+                day_code = get_day_code(slip, current)
+                days_data.append(day_code)
+                current += timedelta(days=1)
+    
+            # Completar hasta 31 días (meses cortos)
+            while len(days_data) < 31:
+                days_data.append('')
+    
+            # Obtener montos (ajusta códigos según tu nómina)
+            def get_amount(code):
+                line = slip.line_ids.filtered(lambda l: l.code == code)
+                return line[0].amount if line else 0.0
+    
+            salario = get_amount('BASIC')
+            he_50_qty = get_amount('HE_50_QTY') or 0
+            he_100_qty = get_amount('HE_100_QTY') or 0
+            he_130_qty = get_amount('HE_130_QTY') or 0
+            he_50_amt = get_amount('HE_50')
+            he_100_amt = get_amount('HE_100')
+            he_130_amt = get_amount('HE_130')
+    
+            vacacion = get_amount('VACACIONES')
+            bonif_fam = get_amount('BONIF_FAM')
+            aguinaldo = get_amount('AGUINALDO')
+            otros = 0.0  # o suma de otros beneficios
+    
+            total_general = salario + he_50_amt + he_100_amt + he_130_amt + vacacion + bonif_fam + aguinaldo + otros
+    
+            # Construir fila
+            row = [
+                idx,
+                ci,
+                name,
+                *days_data,
+                salario,          # SALARIO
+                '',               # TOTAL (puede dejarse vacío o calcular)
+                '', '', '',       # HORAS EXTRAS (cantidades van abajo)
+                he_50_qty, he_100_qty, he_130_qty,
+                he_50_amt, he_100_amt, he_130_amt,
+                vacacion, bonif_fam, aguinaldo, otros,
+                total_general,
+                'Transferencia'   # Forma de pago
+            ]
+    
+            # Escribir fila
+            for col, val in enumerate(row):
+                if col < 3 or 3 <= col <= 33:  # Nro, CI, Nombre, Días 1-31
+                    worksheet.write(current_row, col, val, center)
+                else:
+                    if isinstance(val, float) and val == 0.0:
+                        val = ''
+                    worksheet.write(current_row, col, val, normal)
+    
+            current_row += 1
+        
+        # Cerrar y devolver
+        workbook.close()
+        output.seek(0)
+        file_data = base64.b64encode(output.read())
+        output.close()
+    
+        filename = f"Planilla_Ministerio_{year}_{month}.xlsx"
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': file_data,
+            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         })
     
         return {
