@@ -3,6 +3,7 @@ from odoo import models, fields, api, Command
 from datetime import date,datetime,timedelta
 from dateutil.relativedelta import relativedelta
 from odoo.exceptions import UserError
+from calendar import monthrange
 import io
 import xlsxwriter
 import base64
@@ -24,6 +25,7 @@ class HrContract(models.Model):
         store=True,
         readonly=False,
     )
+    struct_type = fields.Selection('Tipo de estructura',related='struct_id.schedule_pay')
 
     @api.depends('date_to')  # Solo depende de date_to, porque es nuestra referencia
     def _compute_date_events(self):
@@ -573,12 +575,30 @@ class HrContract(models.Model):
         if not self:
             return
     
-        # Validar que todos los payslips sean del mismo mes y empleador
+        first_slip = self[0]
+        first_month = first_slip.date_from.month
+        first_year = first_slip.date_from.year
+    
+        for slip in self:
+            if slip.date_from.month != first_month or slip.date_from.year != first_year:
+                raise UserError("Todos los payslips deben pertenecer al mismo mes y año. "
+                                  "El payslip de %(employee)s está en %(month)s/%(year)s, "
+                                  "pero se esperaba %(expected_month)s/%(expected_year)s." % {
+                    'employee': slip.employee_id.name,
+                    'month': slip.date_from.month,
+                    'year': slip.date_from.year,
+                    'expected_month': first_month,
+                    'expected_year': first_year,
+                })
         company = self[0].company_id
         date_from = self[0].date_from
         date_to = self[0].date_to
         year = date_from.year
         month = date_from.strftime('%B').capitalize()
+
+        year = date_from.year
+        month_num = date_from.month
+        num_days_in_month = monthrange(year, month_num)[1]
     
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -620,30 +640,61 @@ class HrContract(models.Model):
         current_row = 8
     
         # ===== ENCABEZADOS DE COLUMNA =====
-        day_headers = [str(d) for d in range(1, 32)]  # '1' a '31'
-        main_headers = ['Nro. Orden', 'C.I.', 'Apellidos y Nombre'] + day_headers + [
-            'SALARIO', 'TOTAL', 'HORAS EXTRAS', '', '', 'BENEFICIOS SOCIALES', '', '', '', 'Total General'
+        day_headers = [str(d) for d in range(1, num_days_in_month + 1)]
+        
+        # Iniciales de los días
+        DAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+        day_initials = []
+        for day in range(1, num_days_in_month + 1):
+            d = date(year, month_num, day)
+            day_initials.append(DAY_INITIALS[d.weekday()])
+        
+        # Estructura de bloques finales
+        final_sections = [
+            ('SALARIO', 2),
+            ('HORAS EXTRAS', 6),
+            ('BENEFICIOS SOCIALES', 4),
+            ('Total General', 1),
         ]
-        sub_headers = ['', '', ''] + [''] * 31 + [
-            'Importe Unitario', 'Dia Trab.', 'Hora Trab.', 'Importe',
+        
+        # Construir listas
+        basic_cols = 3
+        main_headers = ['Nro. Orden', 'C.I.', 'Apellidos y Nombre'] + day_headers
+        sub_headers = ['', '', ''] + day_initials
+        
+        start_final = basic_cols + num_days_in_month
+        main_header_positions = []
+        current_col = start_final
+        
+        # Agregar subtítulos reales
+        sub_headers.extend([
+            'Forma pago','Importe Unitario', 'Días Trab.','Hora Trab.','Importe',
             'Cant. 50%', 'Cant. 100%', 'Cant. 130%',
-            'Importe 50%', 'Importe 100%', 'Importe 130%',
-            'Vacacion', 'Bonificacion Familiar', 'Aguinaldo', 'Otros Beneficios',
-            'Forma Pago'
-        ]
-    
+            'Imp. 50%', 'Imp. 100%', 'Imp. 130%',
+            'Vacación', 'Bonif. Fam.', 'Aguinaldo', 'Otros',
+            'Total'
+        ])
+        
+        # Preparar posiciones para merge
+        for title, width in final_sections:
+            main_header_positions.append((current_col, current_col + width - 1))
+            current_col += width
+        
         # Escribir encabezados
-        for col, val in enumerate(main_headers):
-            worksheet.write(current_row, col, val, bold_center)
+        for col in range(basic_cols + num_days_in_month):
+            worksheet.write(current_row, col, main_headers[col], bold_center)
+        
+        # Fusionar bloques finales
+        for (start, end), (title, _) in zip(main_header_positions, final_sections):
+            worksheet.merge_range(current_row, start, current_row, end, title, bold_center)
+        
         current_row += 1
+        
+        # Subtítulos
         for col, val in enumerate(sub_headers):
             worksheet.write(current_row, col, val, bold_center)
+        
         current_row += 1
-    
-        # Ajustar ancho de columnas
-        for i in range(len(main_headers)):
-            worksheet.set_column(i, i, 4)
-    
         # ===== MAPEO DE CÓDIGOS (ajusta según tus reglas salariales) =====
         CODE_MAP = {
             'VACACIONES': 'V',
@@ -655,63 +706,77 @@ class HrContract(models.Model):
         }
     
         # Función auxiliar: determinar código para un día
-        def get_day_code(payslip, day_date):
+        def get_day_code(entries, day_date):
             # Buscar en worked_days_line_ids
-            
+            for entry in entries:
+                _logger.info(f"Discriminado {entry}- {entry.date_start.date()}")
+                _logger.info(f"Fecha: {day_date}")
+                if entry.date_start.date() == day_date:
+                    _logger.info(f"Dia de trabajo {entry}")
+                    if entry.work_entry_type_id.code == 'LEAVE120':
+                        return 'V'
+                    if entry.work_entry_type_id.code == 'LEAVE110':
+                        return 'P'
+                    if entry.work_entry_type_id.code == 'WORK100':
+                        return '8'
             return ''  # Ausente o no registrado
-    
         # ===== DATOS DE EMPLEADOS =====
         for idx, slip in enumerate(self, 1):
             employee = slip.employee_id
             ci = employee.identification_id or ''
             name = employee.name or ''
-    
+            work_entries = self.get_work_entries(employee,slip.date_from,slip.date_to)
+            _logger.info(work_entries)
             # Rellenar días del mes
             days_data = []
             current = date_from
             while current <= date_to:
-                day_code = get_day_code(slip, current)
+                day_code = get_day_code(work_entries, current)
+                if day_code == '' and current.weekday() == 6:  # 6 = domingo en Python (lunes=0, ..., domingo=6)
+                    day_code = 'D'
                 days_data.append(day_code)
                 current += timedelta(days=1)
-    
-            # Completar hasta 31 días (meses cortos)
-            while len(days_data) < 31:
-                days_data.append('')
-    
             # Obtener montos (ajusta códigos según tu nómina)
             def get_amount(code):
                 line = slip.line_ids.filtered(lambda l: l.code == code)
                 return line[0].amount if line else 0.0
-    
+            def get_qty(code):
+                line = slip.worked_days_line_ids.filtered(lambda l: l.code == code)
+                if line.code == 'WORK100':
+                    return line[0].number_of_days if line else 0.0
+                return line[0].number_of_hours if line else 0.0
             salario = get_amount('BASIC')
-            he_50_qty = get_amount('HE_50_QTY') or 0
-            he_100_qty = get_amount('HE_100_QTY') or 0
-            he_130_qty = get_amount('HE_130_QTY') or 0
-            he_50_amt = get_amount('HE_50')
-            he_100_amt = get_amount('HE_100')
-            he_130_amt = get_amount('HE_130')
-    
+            salario_dia = slip.contract_id.wage / 30 if slip.contract_id.wage else 0
+            
+            he_50_qty = get_qty('OVERTIME_EVENING') or 0
+            he_100_qty = get_qty('WORK100') or 0
+            hours_worked = he_100_qty * 8
+            he_130_qty = get_qty('OVERTIME_NIGHT') or 0
+            he_50_amt = get_amount('HEX50')
+            he_100_amt = get_amount('HNOC30')
+            he_130_amt = get_amount('HNOC30')
+            
             vacacion = get_amount('VACACIONES')
-            bonif_fam = get_amount('BONIF_FAM')
+            bonif_fam = get_amount('BONIF_FAMILIAR')
             aguinaldo = get_amount('AGUINALDO')
             otros = 0.0  # o suma de otros beneficios
     
-            total_general = salario + he_50_amt + he_100_amt + he_130_amt + vacacion + bonif_fam + aguinaldo + otros
-    
+            total_general = get_amount('NET')
             # Construir fila
             row = [
                 idx,
                 ci,
                 name,
                 *days_data,
-                salario,          # SALARIO
-                '',               # TOTAL (puede dejarse vacío o calcular)
-                '', '', '',       # HORAS EXTRAS (cantidades van abajo)
-                he_50_qty, he_100_qty, he_130_qty,
-                he_50_amt, he_100_amt, he_130_amt,
-                vacacion, bonif_fam, aguinaldo, otros,
+                'M',
+                salario_dia,
+                he_100_qty,
+                hours_worked,
+                salario,
+                he_50_qty, '', he_130_qty,
+                he_50_amt, '', he_130_amt,
+                vacacion, bonif_fam, aguinaldo,otros,
                 total_general,
-                'Transferencia'   # Forma de pago
             ]
     
             # Escribir fila
@@ -724,7 +789,20 @@ class HrContract(models.Model):
                     worksheet.write(current_row, col, val, normal)
     
             current_row += 1
+        day_start_col = 3
+        day_end_col = 2 + num_days_in_month  # ej: si 30 días → col 32
         
+        # Ajustar anchos
+        worksheet.set_column(0, 0, 10)   # Nro
+        worksheet.set_column(1, 1, 12)   # CI
+        worksheet.set_column(2, 2, 25)   # Nombre
+        worksheet.set_column(day_start_col, day_end_col, 4)  # Días
+        
+        # El resto (datos finales)
+        final_start_col = day_end_col + 1
+        total_cols = len(main_headers)
+        if total_cols > final_start_col:
+            worksheet.set_column(final_start_col, total_cols - 1, 10)
         # Cerrar y devolver
         workbook.close()
         output.seek(0)
@@ -744,3 +822,17 @@ class HrContract(models.Model):
             'url': f'/web/content/{attachment.id}?download=true',
             'target': 'self',
         }
+
+
+    def get_work_entries(self, employee, initial_date=False, stop_date=False):
+        domain = [('employee_id', '=', employee.id)]
+        if initial_date:
+            # Asumiendo que 'initial_date' es una fecha y quieres filtrar por fecha de inicio o similar
+            # Ajusta el campo de fecha según tu modelo (por ejemplo: 'date_start', 'date', etc.)
+            domain += [('date_start', '>=', initial_date)]
+        if stop_date:
+            # Asumiendo que 'initial_date' es una fecha y quieres filtrar por fecha de inicio o similar
+            # Ajusta el campo de fecha según tu modelo (por ejemplo: 'date_start', 'date', etc.)
+            domain += [('date_stop', '<=', stop_date)]
+        work_entries = self.env['hr.work.entry'].search(domain)
+        return work_entries

@@ -1,0 +1,105 @@
+<odoo>
+    <record id="view_hr_leave_allocation_review_wizard_form" model="ir.ui.view">
+        <field name="name">hr.leave.allocation.review.wizard.form</field>
+        <field name="model">hr.leave.allocation.review.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="leave_type_id"/>
+                    <field name="year"/>
+                </group>
+                <field name="allocation_line_ids" nolabel="1">
+                    <list editable="bottom">
+                        <field name="selected" widget="boolean_toggle"/>
+                        <field name="employee_id"/>
+                        <field name="date_start" />
+                        <field name="computed_days" />
+                        <field name="has_allocation" />
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_generate_allocations"  string="Generate Allocations" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    
+    <record id="action_hr_leave_allocation_review_wizard" model="ir.actions.act_window">
+        <field name="name">Generate Allocations from Start Date</field>
+        <field name="res_model">hr.leave.allocation.review.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <!-- Opcional: vincularlo al mismo modelo para que aparezca en el menú contextual -->
+        <field name="binding_model_id" ref="hr_holidays.model_hr_leave_allocation"/>
+    </record>
+
+    <!-- Vista de lista -->
+    <record id="hr_leave_allocation_report_view_tree" model="ir.ui.view">
+        <field name="name">hr.leave.allocation.report.list</field>
+        <field name="model">hr.leave.allocation.report</field>
+        <field name="arch" type="xml">
+            <list string="Time Off Allocation Report" create="false" delete="false">
+                <field name="employee_id"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="date_start"/>
+                <field name="computed_days" sum="Total Days"/>
+                <field name="has_allocation" widget="boolean_toggle"/>
+                <field name="year"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Vista de búsqueda -->
+    <record id="hr_leave_allocation_report_search" model="ir.ui.view">
+        <field name="name">hr.leave.allocation.report.search</field>
+        <field name="model">hr.leave.allocation.report</field>
+        <field name="arch" type="xml">
+            <search string="Time Off Allocation">
+                <field name="employee_id"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <filter string="Not Allocated" name="not_allocated" domain="[('has_allocation','=',False)]"/>
+                <filter string="This Year" name="this_year" domain="[('year','=',context_today().year)]"/>
+                <group expand="1" string="Group By">
+                    <filter string="Employee" name="group_employee" context="{'group_by':'employee_id'}"/>
+                    <filter string="Company" name="group_company" context="{'group_by':'company_id'}" groups="base.group_multi_company"/>
+                    <filter string="Allocated" name="group_has_allocation" context="{'group_by':'has_allocation'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Acción de ventana -->
+    <record id="action_hr_leave_allocation_report" model="ir.actions.act_window">
+        <field name="name">Time Off Allocation Report</field>
+        <field name="res_model">hr.leave.allocation.report</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="hr_leave_allocation_report_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No employees found.
+            </p>
+            <p>
+                Review employee start dates and time off allocations.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_generate_allocations_from_report" model="ir.actions.server">
+        <field name="name">Generate Allocations</field>
+        <field name="model_id" ref="model_hr_leave_allocation_report"/>
+        <field name="binding_model_id" ref="model_hr_leave_allocation_report"/>
+        <field name="state">code</field>
+        <field name="code">action = records.action_generate_allocations2()</field>
+    </record>
+
+    <menuitem
+        id="menu_hr_leave_allocation_report"
+        name="Asignaciones pendientes"
+        parent="hr_holidays.menu_hr_holidays_management"
+        action="action_hr_leave_allocation_report"
+        sequence="50"
+        groups="hr_holidays.group_hr_holidays_responsible"
+    />
+    
+</odoo>

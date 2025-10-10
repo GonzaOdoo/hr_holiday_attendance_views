@@ -11,4 +11,13 @@ class HrLateForm(models.Model):
     note = fields.Text('Justificacion')
     state = fields.Selection([('pending','Pendiente'),('accepted','Aceptado')])
     employee_id = fields.Many2one('hr.employee','Empleado')
+
+
+    def accept(self):
+        for record in self:
+            record.state = 'accepted'
     
+    def reject(self):
+        for record in self:
+            record.state = 'pending'
+        

@@ -2,7 +2,7 @@
 from odoo import models, fields, api
 import logging
 import base64
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError,ValidationError
 _logger = logging.getLogger(__name__)
 
 class HrPayrollReport(models.Model):
@@ -77,7 +77,8 @@ class HrPayrollReport(models.Model):
                 raise UserError(f"Empleado {employee.name} no tiene número de cédula.")
     
             # === Campos del formato IPS ===
-            numero_patronal = company.ips  # ← Reemplaza con valor real desde compañía
+            numero_patronal = company.ips.replace('-', '')  # ← Reemplaza con valor real desde compañía
+            fake_patronal = '0002821075'
             numero_asegurado = company.mtess  # ← Puede venir del contrato o empleado
     
             # Formateo de campos con ancho fijo
@@ -86,15 +87,15 @@ class HrPayrollReport(models.Model):
             nombres = str(employee.legal_last_name or " ".join(employee.legal_last_name.split()[:-1]) if employee.legal_last_name else "").strip()[:30].ljust(30)
             categoria = "E".ljust(1)  # E = Empleado activo
             dias_trabajados = "30".zfill(2)  # Puedes calcularlo si tienes datos
-            salario_imponible = f"{imponible:010.2f}".replace('.', '')[:10].zfill(10)  # Ej: 000150000 → 1500.00
+            salario_imponible = str(int(imponible)).rjust(10)
             mes_y_anio = f"{record.date_to.month:02d}{record.date_to.year}"  # MMYYYY
-            codigo_movimiento = "01".ljust(2)
-            salario_real = f"{real:010.2f}".replace('.', '')[:10].zfill(10)
+            codigo_movimiento = "".ljust(2)
+            salario_real = str(int(imponible)).rjust(10)
     
             # Construir línea
             line = (
-                numero_patronal.ljust(10) +
-                numero_asegurado.ljust(10) +
+                fake_patronal.ljust(10) +
+                numero_asegurado.ljust(10,'0') +
                 cedula +
                 apellidos +
                 nombres +
@@ -154,10 +155,12 @@ class HrPayrollReport(models.Model):
     
             # Formateo de campos con ancho fijo
             ci = str(employee.identification_id or "").strip()
-            debito =  str(employee.bank_account_id.acc_number or "")
+            debito =  str(employee.bank_account_id.acc_number or "012345541507")
             concepto = "15"
-            salario_imponible = f"{imponible:010.2f}".replace('.', '') # Ej: 000150000 → 1500.00
+            salario_imponible = f"{imponible:010.2f}" # Ej: 000150000 → 1500.00
             aguinaldo = f"NO"  # MMYYYY
+            if not record.paid_date:
+                raise UserError(f"Debe establecer una fecha de pago/cierre en el recibo: {record.name} del empleado: {record.employee_id.name}")
             fecha_pago = record.paid_date
             dias_semana = {
                 0: "lunes",
@@ -168,9 +171,8 @@ class HrPayrollReport(models.Model):
                 5: "sábado",
                 6: "domingo"
             }
-            nombre_dia = dias_semana[fecha_pago.weekday()]
-            fecha_formateada = f"{fecha_pago.day:02d}/{fecha_pago.month:02d}/{nombre_dia}"
-            # Construir línea
+            nombre_dia = dias_semana[fecha_pago.weekday()] if fecha_pago else '0'
+            fecha_formateada = f"{fecha_pago.day:02d}/{fecha_pago.month:02d}/{nombre_dia}" if fecha_pago else '0'
             line = (
                 '"' + ci + '"' + "," +
                 '"' + debito + '"' + "," +

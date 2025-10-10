@@ -8,3 +8,6 @@ from . import ips_text
 from . import report_wizard
 from . import res_company
 from . import time_off
+from . import salary_attachment
+from . import hr_payslip_run
+from . import hr_allocations_wizard

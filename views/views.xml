@@ -38,7 +38,7 @@
     </record>
 
     <record id="action_hr_leave_late_form" model="ir.actions.act_window">
-        <field name="name">Formularios de Retardo</field>
+        <field name="name">Justificaciones</field>
         <field name="res_model">hr.leave.late.form</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_hr_leave_late_form_list"/>
