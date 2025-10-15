@@ -3,6 +3,7 @@ from odoo import _, api, fields, models
 from datetime import date
 from odoo.tools.sql import SQL
 from dateutil.relativedelta import relativedelta
+from odoo.exceptions import UserError
 
 import logging
 
@@ -147,13 +148,13 @@ class HrLeaveAllocationReport(models.Model):
                 e.id AS id,
                 e.id AS employee_id,
                 e.company_id AS company_id,
-                COALESCE(e.first_contract_date, e.create_date::date) AS date_start,
-                ROUND(
-                    EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.first_contract_date, e.create_date::date))) * 15.0 +
-                    EXTRACT(MONTHS FROM AGE(CURRENT_DATE, COALESCE(e.first_contract_date, e.create_date::date))) * (15.0 / 12),
-                    2
-                ) AS computed_days,
-                -- Opcional: indicar si tiene ALGUNA asignación en el año (sin importar el tipo)
+                COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date) AS date_start,
+                CASE
+                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 10 THEN 30
+                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 6 THEN 18
+                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 1 THEN 12
+                    ELSE 0
+                END AS computed_days,
                 CASE 
                     WHEN alloc_any.id IS NOT NULL THEN TRUE 
                     ELSE FALSE 
@@ -185,20 +186,30 @@ class HrLeaveAllocationReport(models.Model):
 
     def action_generate_allocations2(self):
         """Genera asignaciones para los registros seleccionados."""
+        if not self:
+            raise UserError("No hay registros seleccionados.")
+    
+        # Verificar que todos los registros tengan el mismo año (opcional)
+        years = self.mapped('year')
+        if len(set(years)) > 1:
+            raise UserError("Todos los registros deben pertenecer al mismo año.")
+    
+        year = years[0]  # Tomamos el año común
         records_to_generate = self.filtered(lambda r: not r.has_allocation)
         if not records_to_generate:
+            raise UserError("No se encontraron asignaciones pendientes en el año seleccionado")
             return {'type': 'ir.actions.act_window_close'}  # o muestra aviso
     
         allocations_vals = []
         for r in records_to_generate:
             allocations_vals.append({
-                'name': f"Asignación automática {self.year} - {r.employee_id.name}",
+                'name': f"Asignación automática {year} - {r.employee_id.name}",
                 'employee_id': r.employee_id.id,
                 'holiday_status_id': 1,
                 'number_of_days': r.computed_days,
                 'allocation_type': 'regular',
-                'date_from': date(self.year, 1, 1),
-                'date_to': date(self.year, 12, 31),
+                'date_from': date(year, 1, 1),
+                'date_to': date(year, 12, 31),
                 'state': 'confirm',
             })
     

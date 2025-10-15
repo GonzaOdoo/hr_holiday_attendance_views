@@ -39,13 +39,14 @@
         <field name="name">hr.leave.allocation.report.list</field>
         <field name="model">hr.leave.allocation.report</field>
         <field name="arch" type="xml">
-            <list string="Time Off Allocation Report" create="false" delete="false">
+            <list string="Asignaciones pendientes" create="false" delete="false">
                 <field name="employee_id"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="date_start"/>
                 <field name="computed_days" sum="Total Days"/>
                 <field name="has_allocation" widget="boolean_toggle"/>
                 <field name="year"/>
+                <button name="action_generate_allocations2" type="object" string="Asignar" class="btn-primary" invisible="computed_days &lt;=0 or has_allocation"/>
             </list>
         </field>
     </record>
