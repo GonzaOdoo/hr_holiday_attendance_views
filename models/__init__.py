@@ -11,3 +11,5 @@ from . import time_off
 from . import salary_attachment
 from . import hr_payslip_run
 from . import hr_allocations_wizard
+from . import hr_leave_allocation
+from . import hr_leave_allocation_liquidation_wizard

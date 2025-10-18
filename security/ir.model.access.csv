@@ -6,4 +6,5 @@ access_hr_payroll_report_wizard_user,hr.payroll.report.wizard.user,model_hr_payr
 access_hr_leave_allocation_review_wizard_user,access.hr.leave.allocation.review.wizard.user,model_hr_leave_allocation_review_wizard,base.group_user,1,1,1,1
 access_hr_leave_allocation_review_line_user,access.hr.leave.allocation.review.line.user,model_hr_leave_allocation_review_line,base.group_user,1,1,1,1
 access_hr_leave_allocation_report_user,access.hr.leave.allocation.report.user,model_hr_leave_allocation_report,base.group_user,1,1,1,0
+access_leave_liquidation_wizard,access.leave.liquidation.wizard,model_leave_liquidation_wizard,base.group_user,1,1,1,0
 

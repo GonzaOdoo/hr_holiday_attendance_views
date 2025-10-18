@@ -6,7 +6,6 @@
             <form>
                 <group>
                     <field name="leave_type_id"/>
-                    <field name="year"/>
                 </group>
                 <field name="allocation_line_ids" nolabel="1">
                     <list editable="bottom">
@@ -45,7 +44,10 @@
                 <field name="date_start"/>
                 <field name="computed_days" sum="Total Days"/>
                 <field name="has_allocation" widget="boolean_toggle"/>
-                <field name="year"/>
+                <field name="liquidation_date" />
+                <field name="available_to_liquidate" />
+                <field name="requires_liquidation" />
+                <field name="year" string="Año"/>
                 <button name="action_generate_allocations2" type="object" string="Asignar" class="btn-primary" invisible="computed_days &lt;=0 or has_allocation"/>
             </list>
         </field>
@@ -59,7 +61,6 @@
             <search string="Time Off Allocation">
                 <field name="employee_id"/>
                 <field name="company_id" groups="base.group_multi_company"/>
-                <filter string="Not Allocated" name="not_allocated" domain="[('has_allocation','=',False)]"/>
                 <filter string="This Year" name="this_year" domain="[('year','=',context_today().year)]"/>
                 <group expand="1" string="Group By">
                     <filter string="Employee" name="group_employee" context="{'group_by':'employee_id'}"/>

@@ -19,7 +19,7 @@
           </div>
         </t>
 
-        <form method="post" action="/mi-solicitud/submit" enctype="multipart/form-data">
+        <form method="post" action="/permisos/submit" enctype="multipart/form-data">
           <!-- Empleado (solo lectura, es el del usuario) -->
           <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
           <div class="mb-3 row">
@@ -268,4 +268,116 @@
 </script>
     </t>
   </template>
+
+
+
+
+
+    <template id="my_leaves_list" name="Mis Permisos">
+        <t t-call="website.layout">
+            <t t-set="additional_title">Mis Permisos</t>
+            <div id="wrap" class="oe_structure oe_empty">
+                <div class="container mt-4 mb-5">
+                    <h2 class="mb-4">Mis solicitudes de permiso</h2>
+
+                    <!-- Barra de búsqueda y filtros -->
+                    <div class="d-flex flex-wrap gap-3 mb-4">
+                        <!-- Búsqueda por texto -->
+                        <form method="get" class="d-flex">
+                            <input type="text" name="search" t-att-value="search"
+                                   placeholder="Buscar por tipo o motivo..." class="form-control me-2"/>
+                            <button type="submit" class="btn btn-outline-secondary">Buscar</button>
+                        </form>
+
+                        <!-- Filtro por estado -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                                    data-bs-toggle="dropdown">
+                                <i class="fa fa-filter me-1"></i>
+                                Estado: <t t-if="current_state" t-out="state_options.get(current_state, current_state)"/>
+                                <t t-else="">Todos</t>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <t t-foreach="state_options.items()" t-as="opt">
+                                    <li>
+                                        <a class="dropdown-item" t-att-href="'?%s' % keep_query('search', 'date_from', 'date_to', state=opt[0])">
+                                            <t t-out="opt[1]"/>
+                                        </a>
+                                    </li>
+                                </t>
+                            </ul>
+                        </div>
+
+                        <!-- Filtros por fecha (opcional) -->
+                        <form method="get" class="d-flex gap-2">
+                            <input type="date" name="date_from" t-att-value="date_from" class="form-control" style="width:auto;"/>
+                            <input type="date" name="date_to" t-att-value="date_to" class="form-control" style="width:auto;"/>
+                            <input type="hidden" name="search" t-att-value="search"/>
+                            <input type="hidden" name="state" t-att-value="current_state"/>
+                            <button type="submit" class="btn btn-outline-secondary">Filtrar fechas</button>
+                        </form>
+                    </div>
+
+                    <!-- Lista de solicitudes -->
+                    <t t-if="not leaves">
+                        <div class="alert alert-info">
+                            No se encontraron solicitudes de permiso.
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo de permiso</th>
+                                        <th>Fecha(s)</th>
+                                        <th>Estado</th>
+                                        <th>Motivo</th>
+                                        <th>Días</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="leaves" t-as="leave">
+                                        <tr>
+                                            <td><t t-out="leave.holiday_status_id.name"/></td>
+                                            <td>
+                                                <t t-if="leave.request_date_from == leave.request_date_to">
+                                                    <t t-out="leave.request_date_from"/>
+                                                </t>
+                                                <t t-else="">
+                                                    <t t-out="leave.request_date_from"/> – <t t-out="leave.request_date_to"/>
+                                                </t>
+                                            </td>
+                                            <td>
+                                                <span t-att-class="{
+                                                    'badge bg-warning': leave.state == 'confirm',
+                                                    'badge bg-success': leave.state == 'validate',
+                                                    'badge bg-danger': leave.state == 'refuse',
+                                                    'badge bg-secondary': leave.state == 'cancel'
+                                                }">
+                                                    <t t-if="leave.state == 'confirm'">Pendiente</t>
+                                                    <t t-if="leave.state == 'validate'">Aprobado</t>
+                                                    <t t-if="leave.state == 'refuse'">Rechazado</t>
+                                                    <t t-if="leave.state == 'cancel'">Cancelado</t>
+                                                </span>
+                                            </td>
+                                            <td><t t-out="leave.name or '—'"/></td>
+                                            <td><t t-out="round(leave.number_of_days, 2)"/></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+
+                    <!-- Enlace para crear nuevo permiso -->
+                    <div class="mt-4">
+                        <a href="/permisos" class="btn btn-primary">
+                            <i class="fa fa-plus me-1"></i> Solicitar nuevo permiso
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
 </odoo>

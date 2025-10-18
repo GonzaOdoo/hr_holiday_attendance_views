@@ -1,0 +1,49 @@
+<odoo>
+    <record id="view_hr_leave_allocation_form_inherit_liquidation" model="ir.ui.view">
+        <field name="name">hr.leave.allocation.form.inherit.liquidation</field>
+        <field name="model">hr.leave.allocation</field>
+        <field name="inherit_id" ref="hr_holidays.hr_leave_allocation_view_form_manager"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button" position="after">
+                <button name="action_open_liquidation_wizard"
+                        type="object"
+                        string="Crear asiento de liquidacion"
+                        class="btn-primary"
+                        />
+                <button name="action_recompute_liquidation_data"
+                        type="object"
+                        string="Calcular disponibles"
+                        class="btn-secondary"
+                        />
+            </xpath>
+        </field>
+    </record>
+    <record id="action_liquidate_leave_wizard" model="ir.actions.act_window">
+        <field name="name">Liquidar días vencidos</field>
+        <field name="res_model">leave.liquidation.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'default_allocation_id': active_id}</field>
+    </record>
+
+
+     <record id="view_leave_liquidation_wizard_form" model="ir.ui.view">
+        <field name="name">leave.liquidation.wizard.form</field>
+        <field name="model">leave.liquidation.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Liquidate Unused Leave Days">
+                <group>
+                    <field name="employee_id"/>
+                    <field name="allocation_id"/>
+                    <field name="available_to_liquidate"/>
+                    <field name="month_year" widget="date" options="{'datepicker': {'minDate': '2000-01-01', 'maxDate': '2030-12-31'}}"/>
+                    <field name="leave_type_id" domain="[('has_valid_allocation', '=', False), ('requires_allocation', '=', 'no')]"/>
+                </group>
+                <footer>
+                    <button name="action_liquidate" string="Crear liquidación" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

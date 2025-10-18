@@ -24,7 +24,7 @@ class HrLeaveAllocationReviewWizard(models.TransientModel):
     leave_type_id = fields.Many2one(
         "hr.leave.type", string="Time Off Type", required=True,
         domain="[('company_id', 'in', [company_id, False])]")
-    year = fields.Integer(default=lambda self: date.today().year, required=True)
+    
 
     @api.model
     def default_get(self, fields_list):
@@ -133,9 +133,78 @@ class HrLeaveAllocationReport(models.Model):
     company_id = fields.Many2one('res.company', 'Company', readonly=True)
     date_start = fields.Date('Fecha de inicio', readonly=True)
     computed_days = fields.Float('Dias disponibles', readonly=True, digits=(16, 2))
-    has_allocation = fields.Boolean('Asignado', readonly=True)  # ← Opcional: si quieres mostrar si tiene ALGUNA asignación
+    has_allocation = fields.Boolean('Asignado', compute='_compute_has_allocation')
     year = fields.Integer('Año', readonly=True)
+    year = fields.Integer(default=lambda self: date.today().year, required=True)
+    liquidation_date = fields.Date('Fecha de liquidación', compute='_compute_allocation_data', store=False)
+    available_to_liquidate = fields.Float('Disponible para liquidar', compute='_compute_allocation_data', store=False)
+    requires_liquidation = fields.Boolean('Requiere liquidación', compute='_compute_allocation_data', store=False)
 
+    @api.depends('has_allocation')
+    def _compute_allocation_data(self):
+        for record in self:
+            emp = record.employee_id
+            if not emp:
+                record.update({
+                    'has_allocation': False,
+                    'liquidation_date': False,
+                    'available_to_liquidate': 0.0,
+                    'requires_liquidation': False,
+                })
+                continue
+    
+            # Calcular el período laboral actual del empleado
+            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            today = fields.Date.today()
+            years_worked = relativedelta(today, start).years
+            period_start = start + relativedelta(years=years_worked)
+            period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
+    
+            # Buscar la asignación EXACTA para este período
+            allocation = self.env['hr.leave.allocation'].search([
+                ('employee_id', '=', emp.id),
+                ('state', 'in', ['confirm', 'validate', 'validate1']),
+                ('date_from', '=', period_start),
+                ('date_to', '=', period_end),
+            ], limit=1)
+    
+            if allocation:
+                record.update({
+                    'has_allocation': True,
+                    'liquidation_date': allocation.liquidation_date,
+                    'available_to_liquidate': allocation.available_to_liquidate,
+                    'requires_liquidation': allocation.requires_liquidation,
+                })
+                
+            else:
+                record.update({
+                    'has_allocation': False,
+                    'liquidation_date': False,
+                    'available_to_liquidate': 0.0,
+                    'requires_liquidation': False,
+                })
+                
+
+    def _compute_has_allocation(self):
+        for record in self:
+            emp = record.employee_id
+            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            # Calcular el aniversario más reciente (inicio del período laboral actual)
+            today = fields.Date.today()
+            years_worked = relativedelta(today, start).years
+            period_start = start + relativedelta(years=years_worked)
+            period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
+
+            # Buscar asignación para este período exacto
+            allocation = self.env['hr.leave.allocation'].search([
+                ('employee_id', '=', emp.id),
+                ('state', 'in', ['confirm', 'validate', 'validate1']),
+                ('date_from', '=', period_start),
+                ('date_to', '=', period_end),
+            ], limit=1)
+
+            record.has_allocation = bool(allocation)
+    
     @property
     def _table_query(self):
         return SQL("%s %s %s", self._select(), self._from(), self._where())
@@ -155,71 +224,81 @@ class HrLeaveAllocationReport(models.Model):
                     WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 1 THEN 12
                     ELSE 0
                 END AS computed_days,
-                CASE 
-                    WHEN alloc_any.id IS NOT NULL THEN TRUE 
-                    ELSE FALSE 
-                END AS has_allocation,
                 %(year)s AS year
             """,
             year=current_year
         )
-
+    
     def _from(self):
-        current_year = date.today().year
-        return SQL(
-            """
-            FROM hr_employee e
-            LEFT JOIN hr_leave_allocation alloc_any ON (
-                alloc_any.employee_id = e.id
-                AND alloc_any.state IN ('confirm', 'validate', 'validate1')
-                AND alloc_any.date_from <= %(year_end)s
-                AND alloc_any.date_to >= %(year_start)s
-            )
-            """,
-            year_start=date(current_year, 1, 1),
-            year_end=date(current_year, 12, 31)
-        )
-
+        return SQL("FROM hr_employee e")
+    
     def _where(self):
         return SQL("WHERE e.active = true")
 
 
     def action_generate_allocations2(self):
-        """Genera asignaciones para los registros seleccionados."""
         if not self:
-            raise UserError("No hay registros seleccionados.")
+            raise UserError(_("No hay registros seleccionados."))
     
-        # Verificar que todos los registros tengan el mismo año (opcional)
-        years = self.mapped('year')
-        if len(set(years)) > 1:
-            raise UserError("Todos los registros deben pertenecer al mismo año.")
-    
-        year = years[0]  # Tomamos el año común
-        records_to_generate = self.filtered(lambda r: not r.has_allocation)
+        # Filtrar solo empleados con días > 0 y sin asignación
+        records_to_generate = self.filtered(lambda r: r.computed_days > 0 and not r.has_allocation)
         if not records_to_generate:
-            raise UserError("No se encontraron asignaciones pendientes en el año seleccionado")
-            return {'type': 'ir.actions.act_window_close'}  # o muestra aviso
+            raise UserError(_("No se encontraron asignaciones pendientes (solo se generan si hay días > 0)."))
     
         allocations_vals = []
         for r in records_to_generate:
+            emp = r.employee_id
+            # 🔁 Calcular fechas directamente (sin método auxiliar)
+            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            today = fields.Date.today()
+            years_worked = relativedelta(today, start).years
+            period_start = start + relativedelta(years=years_worked)
+            period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
+    
+            # Buscar tipo de ausencia de vacaciones
+            leave_type = self.env.ref('hr_holidays.holiday_status_cl', raise_if_not_found=False)
+            if not leave_type:
+                leave_type = self.env['hr.leave.type'].search([('requires_allocation', '!=', 'no')], limit=1)
+            if not leave_type:
+                raise UserError(_("No se encontró un tipo de ausencia válido para asignaciones."))
+    
             allocations_vals.append({
-                'name': f"Asignación automática {year} - {r.employee_id.name}",
-                'employee_id': r.employee_id.id,
-                'holiday_status_id': 1,
+                'name': f"Asignación automática {period_start.year} - {emp.name}",
+                'employee_id': emp.id,
+                'holiday_status_id': leave_type.id,
                 'number_of_days': r.computed_days,
                 'allocation_type': 'regular',
-                'date_from': date(year, 1, 1),
-                'date_to': date(year, 12, 31),
+                'date_from': period_start,
+                'date_to': period_end,
                 'state': 'confirm',
             })
     
+        if not allocations_vals:
+            raise UserError(_("No se generaron asignaciones."))
+    
         allocations = self.env['hr.leave.allocation'].create(allocations_vals)
-        allocations.filtered(lambda a: a.validation_type != 'no_validation').action_validate()
+        to_validate = allocations.filtered(lambda a: a.validation_type != 'no_validation')
+        if to_validate:
+            to_validate.action_validate()
     
         return {
             'type': 'ir.actions.act_window',
             'name': _('Generated Allocations'),
             'res_model': 'hr.leave.allocation',
-            'view_mode': 'list,form',
+            'view_mode': 'tree,form',
             'domain': [('id', 'in', allocations.ids)],
         }
+
+    @api.model
+    def _cron_generate_missing_allocations(self):
+        # Crear un "falso" recordset del reporte ejecutando su consulta
+        report_model = self.env['hr.leave.allocation.report']
+        self.env.cr.execute(report_model._table_query)
+        ids = [r[0] for r in self.env.cr.fetchall()]
+        report_records = report_model.browse(ids)
+    
+        pending = report_records.filtered(lambda r: r.computed_days > 0 and not r.has_allocation)
+        if pending:
+            _logger.info("Generando %d asignaciones pendientes vía CRON...", len(pending))
+            # Llamar al método de generación (que ahora no usa _get_period_dates)
+            pending.action_generate_allocations2()

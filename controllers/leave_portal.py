@@ -11,7 +11,7 @@ import json
 _logger = logging.getLogger(__name__)
 class LeavePortal(http.Controller):
 
-    @http.route('/mi-solicitud', auth='user', website=True)
+    @http.route('/permisos', auth='user', website=True)
     def leave_form(self, **kw):
         user = request.env.user
     
@@ -88,7 +88,7 @@ class LeavePortal(http.Controller):
             'error': kw.get('error'),
         })
 
-    @http.route('/mi-solicitud/submit', auth='user', website=True, methods=['POST'])
+    @http.route('/permisos/submit', auth='user', website=True, methods=['POST'])
     def leave_submit(self, **post):
         """Procesa el envío del formulario."""
         user = request.env.user
@@ -121,7 +121,7 @@ class LeavePortal(http.Controller):
                         'res_id': leave.id,
                     })
 
-            return request.redirect('/mi-solicitud/success')
+            return request.redirect('/permisos/success')
 
         except (ValidationError, UserError) as e:
             # Extraer solo el mensaje del error y codificarlo correctamente
@@ -138,7 +138,7 @@ class LeavePortal(http.Controller):
                     params.append(f'{k}={urllib.parse.quote_plus(str(v))}')
             
             # Construir la URL de redirección
-            redirect_url = '/mi-solicitud'
+            redirect_url = '/permisos'
             if params:
                 redirect_url += '?' + '&'.join(params)
             redirect_url += f'&error={encoded_error}'
@@ -157,9 +157,57 @@ class LeavePortal(http.Controller):
                 if k != 'error':
                     params.append(f'{k}={urllib.parse.quote_plus(str(v))}')
             
-            redirect_url = '/mi-solicitud'
+            redirect_url = '/permisos'
             if params:
                 redirect_url += '?' + '&'.join(params)
             redirect_url += f'&error={encoded_error}'
             
             return request.redirect(redirect_url)
+
+
+    @http.route('/mis-permisos', auth='user', website=True)
+    def my_leaves(self, **kw):
+        user = request.env.user
+        employee = user.employee_id
+    
+        if not employee:
+            raise UserError("No tiene un empleado asociado.")
+    
+        # Obtener parámetros de búsqueda
+        search = kw.get('search', '')
+        state = kw.get('state', '')  # 'confirm', 'validate', 'refuse', etc.
+        date_from = kw.get('date_from', '')
+        date_to = kw.get('date_to', '')
+    
+        # Dominio base
+        domain = [('employee_id', '=', employee.id)]
+    
+        # Filtros
+        if search:
+            domain += ['|', ('name', 'ilike', search), ('holiday_status_id.name', 'ilike', search)]
+        if state:
+            domain += [('state', '=', state)]
+        if date_from:
+            domain += [('request_date_from', '>=', date_from)]
+        if date_to:
+            domain += [('request_date_to', '<=', date_to)]
+    
+        leaves = request.env['hr.leave'].sudo().search(domain, order='create_date desc')
+    
+        # Opciones para los filtros
+        state_options = {
+            '': 'Todos',
+            'confirm': 'Pendiente',
+            'validate': 'Aprobado',
+            'refuse': 'Rechazado',
+            'cancel': 'Cancelado',
+        }
+    
+        return request.render('hr_holiday_attendance_views.my_leaves_list', {
+            'leaves': leaves,
+            'search': search,
+            'current_state': state,
+            'state_options': state_options,
+            'date_from': date_from,
+            'date_to': date_to,
+        })
