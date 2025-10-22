@@ -139,6 +139,61 @@ class HrLeaveAllocationReport(models.Model):
     liquidation_date = fields.Date('Fecha de liquidación', compute='_compute_allocation_data', store=False)
     available_to_liquidate = fields.Float('Disponible para liquidar', compute='_compute_allocation_data', store=False)
     requires_liquidation = fields.Boolean('Requiere liquidación', compute='_compute_allocation_data', store=False)
+    already_liquidated_leave_id = fields.Many2one(
+    'hr.leave',
+    string='Liquidación existente',
+    compute='_compute_already_liquidated',
+    store=False
+    )
+    
+    liquidation_payslip_state = fields.Selection(
+        related='already_liquidated_leave_id.payslip_state',
+        string='Estado en nómina',
+        readonly=True,
+        store=False
+    )
+    
+    has_liquidation_leave = fields.Boolean(
+        compute='_compute_already_liquidated',
+        store=False
+    )
+
+    @api.depends('employee_id', 'requires_liquidation')
+    def _compute_already_liquidated(self):
+        for record in self:
+            record.already_liquidated_leave_id = False
+            record.has_liquidation_leave = False
+    
+            if not record.employee_id:
+                continue
+    
+            # 1. Obtener la asignación REAL asociada a este período (igual que en _compute_allocation_data)
+            emp = record.employee_id
+            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            today = fields.Date.today()
+            years_worked = relativedelta(today, start).years
+            period_start = start + relativedelta(years=years_worked)
+            period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
+    
+            allocation = self.env['hr.leave.allocation'].search([
+                ('employee_id', '=', emp.id),
+                ('state', 'in', ['confirm', 'validate', 'validate1']),
+                ('date_from', '=', period_start),
+                ('date_to', '=', period_end),
+            ], limit=1)
+    
+            if not allocation:
+                continue
+    
+            # 2. ✅ BUSCAR DIRECTAMENTE POR allocation_id (¡mucho más seguro!)
+            leave = self.env['hr.leave'].search([
+                ('allocation_id', '=', allocation.id),
+                ('state', 'in', ['confirm', 'validate']),
+            ], limit=1, order='create_date DESC')
+    
+            if leave:
+                record.already_liquidated_leave_id = leave
+                record.has_liquidation_leave = True
 
     @api.depends('has_allocation')
     def _compute_allocation_data(self):
@@ -281,13 +336,7 @@ class HrLeaveAllocationReport(models.Model):
         if to_validate:
             to_validate.action_validate()
     
-        return {
-            'type': 'ir.actions.act_window',
-            'name': _('Generated Allocations'),
-            'res_model': 'hr.leave.allocation',
-            'view_mode': 'tree,form',
-            'domain': [('id', 'in', allocations.ids)],
-        }
+        return
 
     @api.model
     def _cron_generate_missing_allocations(self):
@@ -302,3 +351,136 @@ class HrLeaveAllocationReport(models.Model):
             _logger.info("Generando %d asignaciones pendientes vía CRON...", len(pending))
             # Llamar al método de generación (que ahora no usa _get_period_dates)
             pending.action_generate_allocations2()
+
+
+    def action_liquidate_allocation(self):
+        self.ensure_one()
+        
+        # 1. Recuperar la asignación real (igual que en _compute_allocation_data)
+        emp = self.employee_id
+        if not emp:
+            raise UserError(_("Empleado no definido."))
+    
+        start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+        today = fields.Date.today()
+        years_worked = relativedelta(today, start).years
+        period_start = start + relativedelta(years=years_worked)
+        period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
+        
+    
+        allocation = self.env['hr.leave.allocation'].search([
+            ('employee_id', '=', emp.id),
+            ('state', 'in', ['confirm', 'validate', 'validate1']),
+            ('date_from', '=', period_start),
+            ('date_to', '=', period_end),
+        ], limit=1)
+    
+        if not allocation:
+            raise UserError(_("No se encontró la asignación correspondiente para liquidar."))
+    
+    
+        if allocation.available_to_liquidate <= 0:
+            raise UserError(_("No hay días disponibles para liquidar."))
+    
+        # 2. Verificar que el tipo de ausencia de liquidación esté definido
+        if not allocation.liquidation_leave_type_id:
+            raise UserError(_(
+                "No se ha definido un tipo de ausencia para liquidaciones en la asignación de %s. "
+                "Por favor, configúrelo en la asignación." % emp.name
+            ))
+
+        today = fields.Date.today()
+        if allocation.liquidation_date < today:
+            # Ya venció: usar mes siguiente al vencimiento (comportamiento actual)
+            start_of_liquidation_month = (allocation.liquidation_date + relativedelta(days=1)).replace(day=1)
+        else:
+            # Aún no vence: usar el mes actual
+            start_of_liquidation_month = today.replace(day=1)
+        num_days = int(allocation.available_to_liquidate)
+        if num_days <= 0:
+            num_days = 1  # al menos 1 día si hay fracción
+        
+        # Fechas de la ausencia
+        date_from = start_of_liquidation_month
+        date_to = date_from + relativedelta(days=num_days - 1)
+        # 3. Crear la ausencia de liquidación
+        leave_vals = {
+            'name': f"Liquidación de días no tomados ({period_start.year}) - {emp.name}",
+            'employee_id': emp.id,
+            'holiday_status_id': allocation.liquidation_leave_type_id.id,
+            'allocation_id': allocation.id,
+            'request_date_from': date_from,
+            'request_date_to': date_to,  # mismo día (días no laborables o pago en efectivo)
+            'number_of_days': allocation.available_to_liquidate,
+            'state': 'confirm',
+        }
+    
+        leave = self.env['hr.leave'].create(leave_vals)
+    
+        # 4. Validar automáticamente si es posible
+        if leave.validation_type != 'no_validation':
+            try:
+                leave.action_validate()
+            except Exception as e:
+                _logger.warning("No se pudo validar automáticamente la liquidación: %s", str(e))
+    
+        # 5. Forzar recomputación (por si acaso)
+        allocation._compute_available_to_liquidate()
+        allocation._compute_requires_liquidation()
+    
+        # 6. Notificación
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Liquidación exitosa'),
+                'message': _(
+                    'Se liquidaron %s días para %s. Ausencia creada: %s'
+                ) % (allocation.available_to_liquidate, emp.name, leave.name),
+                'type': 'success',
+                'sticky': False,
+                'next': {'type': 'ir.actions.act_window_close'},  # cierra si está en popup
+            }
+        }
+
+
+    def action_liquidate_selected_allocations(self):
+        """
+        Acción masiva: liquidar todas las asignaciones seleccionadas que requieran liquidación.
+        """
+        records_to_liquidate = self.filtered(lambda r: r.requires_liquidation)
+        
+        if not records_to_liquidate:
+            raise UserError(_("No hay asignaciones seleccionadas que requieran liquidación."))
+    
+        success_count = 0
+        errors = []
+    
+        for record in records_to_liquidate:
+            try:
+                # Reutilizamos la lógica individual (¡sin duplicar código!)
+                record.action_liquidate_allocation()
+                success_count += 1
+            except Exception as e:
+                emp_name = record.employee_id.name or "Desconocido"
+                errors.append(f"{emp_name}: {str(e)}")
+                _logger.error("Error al liquidar asignación de %s: %s", emp_name, str(e))
+    
+        # Mensaje de resultado
+        message = f"✅ Se liquidaron {success_count} asignaciones correctamente."
+        msg_type = 'success'
+    
+        if errors:
+            message += "\n\n⚠️ Errores:\n" + "\n".join(errors)
+            msg_type = 'warning'
+    
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Liquidación masiva completada'),
+                'message': message,
+                'type': msg_type,
+                'sticky': False,
+            }
+    }

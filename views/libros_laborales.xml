@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_labor_report_wizard_form" model="ir.ui.view">
+        <field name="name">labor.report.wizard.form</field>
+        <field name="model">labor.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Generar Libro Laboral">
+                <group>
+                    <field name="report_type" widget="selection"/>
+                    <field name="year"/>
+                </group>
+                <footer>
+                    <button name="action_generate_report" string="Generar" type="object"
+                            class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción para abrir el wizard -->
+    <record id="action_labor_report_wizard" model="ir.actions.act_window">
+        <field name="name">Generar Libro Laboral</field>
+        <field name="res_model">labor.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Opcional: Menú o botón en algún lugar del menú principal -->
+    <!-- Por ejemplo, en el menú de Recursos Humanos -->
+    <menuitem id="menu_labor_report_wizard"
+              name="Libros Laborales"
+              parent="hr_payroll.menu_hr_payroll_report"
+              action="action_labor_report_wizard"/>
+</odoo>

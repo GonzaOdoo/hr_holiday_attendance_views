@@ -58,7 +58,7 @@
         <field name="name">hr.leave.allocation.report.search</field>
         <field name="model">hr.leave.allocation.report</field>
         <field name="arch" type="xml">
-            <search string="Time Off Allocation">
+            <search string="Estado de liquidaciones">
                 <field name="employee_id"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <filter string="This Year" name="this_year" domain="[('year','=',context_today().year)]"/>
@@ -97,7 +97,7 @@
 
     <menuitem
         id="menu_hr_leave_allocation_report"
-        name="Asignaciones pendientes"
+        name="Estado de liquidaciones"
         parent="hr_holidays.menu_hr_holidays_management"
         action="action_hr_leave_allocation_report"
         sequence="50"

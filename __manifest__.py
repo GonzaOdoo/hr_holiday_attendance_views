@@ -19,6 +19,7 @@
             'views/attendance_views.xml',
             'views/leave_form_custom.xml',
             'views/hr_leave_allocation_views.xml',
+            'views/libros_laborales.xml',
             'security/ir.model.access.csv'],
     "assets": {},
     "license": "LGPL-3",
