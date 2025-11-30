@@ -26,7 +26,7 @@ class HrLeave(models.Model):
         readonly=True
     )
     allocation_id = fields.Many2one('hr.leave.allocation', string="Asignación de origen")
-
+    replacement = fields.Many2one("hr.leave", string="Reemplazante")
     @api.depends('holiday_status_id', 'employee_id', 'request_date_from')
     def _compute_balance_info(self):
         for leave in self:

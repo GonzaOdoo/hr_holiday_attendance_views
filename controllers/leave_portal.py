@@ -67,9 +67,9 @@ class LeavePortal(http.Controller):
             'request_date_from': kw.get('request_date_from') or fields.Date.today(),
             'request_date_to': kw.get('request_date_to') or fields.Date.today(),
             'holiday_status_id': int(selected_type_id) if selected_type_id else False,
-            'x_studio_reemplazante': int(kw.get('x_studio_reemplazante') or 0) or False,
+            'replacement': int(kw.get('replacement') or 0) or False,
             'name': kw.get('name', ''),
-            'x_studio_tipo_de_reposo': kw.get('x_studio_tipo_de_reposo', ''),
+            'tipo_enfermedad': kw.get('tipo_enfermedad', ''),
             'request_unit_hours': kw.get('request_unit_hours') == 'Yes',
             'request_hour_from': float(kw.get('request_hour_from') or 0.0),
             'request_hour_to': float(kw.get('request_hour_to') or 0.0),
@@ -104,12 +104,12 @@ class LeavePortal(http.Controller):
             # Validar y convertir valores
             vals = {
                 'employee_id': employee.id,  # ¡El empleado siempre es el del usuario!
-                'x_studio_reemplazante': int(post.get('x_studio_reemplazante', 0)) if post.get('x_studio_reemplazante', 0) else False,
+                'replacement': int(post.get('replacement', 0)) if post.get('replacement', 0) else False,
                 'holiday_status_id': int(post['holiday_status_id']),
                 'request_date_from': post['request_date_from'],
                 'request_date_to': post['request_date_to'],
                 'name': post.get('name', ''),
-                'x_studio_tipo_de_reposo': post.get('x_studio_tipo_de_reposo', ''),
+                'tipo_enfermedad': post.get('tipo_enfermedad', ''),
             }
 
             # Crear la solicitud

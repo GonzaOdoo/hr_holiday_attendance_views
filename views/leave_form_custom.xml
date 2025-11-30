@@ -49,7 +49,7 @@
           <div id="tipo-reposo-field" class="mb-2 row" style="display:none;">
               <label class="col-sm-3 col-form-label">Tipo de reposo <span class="text-danger">*</span></label>
               <div class="col-sm-9">
-                <select name="x_studio_tipo_de_reposo" class="form-select">
+                <select name="tipo_enfermedad" class="form-select">
                   <option value="">-- Seleccione --</option>
                   <option value="ips">Con reposo IPS</option>
                   <option value="privado">Con reposo privado</option>
@@ -106,10 +106,10 @@
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">Reemplazante</label>
             <div class="col-sm-9">
-              <select name="x_studio_reemplazante" class="form-select">
+              <select name="replacement" class="form-select">
                 <option value="">-- Ninguno --</option>
                 <t t-foreach="employees" t-as="emp">
-                  <option t-att-value="emp.id" t-att-selected="leave.x_studio_reemplazante.id == emp.id">
+                  <option t-att-value="emp.id" t-att-selected="leave.replacement.id == emp.id">
                     <t t-esc="emp.name"/>
                   </option>
                 </t>

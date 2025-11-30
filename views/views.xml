@@ -45,7 +45,6 @@
     </record>
     <menuitem id="menu_hr_leave_late_form" 
               name="Justificaciones" 
-              parent="studio_customization.asistencias_informac_d581d0c1-8639-463f-9fcd-dd23e63270b2" 
               action="action_hr_leave_late_form" 
               sequence="10"/>
     <!-- Menú -->

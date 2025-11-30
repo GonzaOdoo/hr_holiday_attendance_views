@@ -109,8 +109,6 @@
 
     <menuitem id="menu_hr_attendance_late_management"
           name="Llegadas Tardías"
-          parent="studio_customization.asistencias_gestion_6f7f5937-c120-4373-ac4f-b7e8a60bcc41"
           action="action_hr_attendance_late_management"
           sequence="20"/>
-    
 </odoo>
