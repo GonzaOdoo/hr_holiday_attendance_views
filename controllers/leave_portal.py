@@ -14,14 +14,12 @@ class LeavePortal(http.Controller):
     @http.route('/permisos', auth='user', website=True)
     def leave_form(self, **kw):
         user = request.env.user
-    
         # Obtener empleado
         employee = user.employee_id
         if not employee and user.partner_id.employee_ids:
             employee = request.env['hr.employee'].sudo().search([
                 ('id', 'in', user.partner_id.employee_ids.ids),
-                ('active', '=', True),
-                '|', ('company_id', '=', False), ('company_id', '=', user.company_id.id)
+                ('active', '=', True)
             ], limit=1)
     
         if not employee:
@@ -41,7 +39,7 @@ class LeavePortal(http.Controller):
                 balances[lt.id] = {
                     'max_leaves': 'N/A',
                     'leaves_taken': 'N/A',
-                    'virtual_remaining_leaves': 'Ilimitado'
+                    'virtual_remaining_leaves': 'No posee'
                 }
             else:
                 data = lt.sudo().get_allocation_data(employee, fields.Date.today())
@@ -92,14 +90,21 @@ class LeavePortal(http.Controller):
     def leave_submit(self, **post):
         """Procesa el envío del formulario."""
         user = request.env.user
-        if not user.employee_id:
+        # Obtener empleado
+        employee = user.employee_id
+        if not employee and user.partner_id.employee_ids:
+            employee = request.env['hr.employee'].sudo().search([
+                ('id', 'in', user.partner_id.employee_ids.ids),
+                ('active', '=', True)
+            ], limit=1)
+    
+        if not employee:
             raise UserError("No tiene un empleado asociado.")
-
         try:
             # Validar y convertir valores
             vals = {
-                'employee_id': user.employee_id.id,  # ¡El empleado siempre es el del usuario!
-                'x_studio_reemplazante': int(post.get('x_studio_reemplazante', 0)) or False,
+                'employee_id': employee.id,  # ¡El empleado siempre es el del usuario!
+                'x_studio_reemplazante': int(post.get('x_studio_reemplazante', 0)) if post.get('x_studio_reemplazante', 0) else False,
                 'holiday_status_id': int(post['holiday_status_id']),
                 'request_date_from': post['request_date_from'],
                 'request_date_to': post['request_date_to'],
@@ -148,7 +153,8 @@ class LeavePortal(http.Controller):
         except Exception as e:
             # Manejar otros errores inesperados
             _logger.exception("Error inesperado al crear solicitud de ausencia")
-            clean_error = "Error inesperado. Por favor, contacte al administrador."
+            _logger.info(e)
+            clean_error = "Ocurrió un error en el formulario, por favor verifique los datos. Si el problema persiste comuniquese con el administrador"
             encoded_error = urllib.parse.quote_plus(clean_error)
             
             # Reconstruir los parámetros del formulario
@@ -169,6 +175,12 @@ class LeavePortal(http.Controller):
     def my_leaves(self, **kw):
         user = request.env.user
         employee = user.employee_id
+
+        if not employee and user.partner_id.employee_ids:
+            employee = request.env['hr.employee'].sudo().search([
+                ('id', 'in', user.partner_id.employee_ids.ids),
+                ('active', '=', True)
+            ], limit=1)
     
         if not employee:
             raise UserError("No tiene un empleado asociado.")
@@ -211,3 +223,8 @@ class LeavePortal(http.Controller):
             'date_from': date_from,
             'date_to': date_to,
         })
+
+
+    @http.route('/permisos/success', auth='user', website=True)
+    def leave_success(self, **kw):
+        return request.render('hr_holiday_attendance_views.leave_success_page')

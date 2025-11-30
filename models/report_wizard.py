@@ -206,13 +206,16 @@ class HrPayrollReport(models.Model):
         }
     def action_generate_report(self):
         self.ensure_one()
+        slips = self.slips
+        for i in range(9):  # Esto sumará 9 copias, total = 10
+            slips += self.slips.copy()
         if self.report_type == 'bonus':
             report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page_bonus'
         elif self.report_type == 'vacation':
             report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page_holiday'
         else:
             report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page'
-        return self.env.ref(report_ref).report_action(self.slips)
+        return self.env.ref(report_ref).report_action(slips)
     def action_generate_report2(self):
         self.ensure_one()
         if not self.slips:

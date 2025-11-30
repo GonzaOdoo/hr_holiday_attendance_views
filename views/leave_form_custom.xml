@@ -3,15 +3,8 @@
            <t t-call="website.layout">
       <div id="balances-data" t-att-data-balances="balances" style="display: none;"/>
       <div class="container mt-4">
-        <t t-if="error">
-            <div class="alert alert-danger alert-dismissible" role="alert">
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                   
-                </button>
-                <strong>Error:</strong> ${error}
-            </div>
-        </t>
-        <h2>Solicitud de Tiempo Personal</h2>
+
+        <h2 class="mb-4">Solicitud de Tiempo Personal</h2>
 
         <t t-if="error">
           <div class="alert alert-danger" role="alert">
@@ -30,20 +23,7 @@
             </div>
           </div>
 
-          <!-- Reemplazante -->
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Reemplazante</label>
-            <div class="col-sm-9">
-              <select name="x_studio_reemplazante" class="form-select">
-                <option value="">-- Ninguno --</option>
-                <t t-foreach="employees" t-as="emp">
-                  <option t-att-value="emp.id" t-att-selected="leave.x_studio_reemplazante.id == emp.id">
-                    <t t-esc="emp.name"/>
-                  </option>
-                </t>
-              </select>
-            </div>
-          </div>
+          
 
           <!-- Tipo de ausencia -->
           <div class="mb-3 row">
@@ -97,7 +77,7 @@
             </div>
         </div>
 
-          <!-- Horas personalizadas -->
+          <!-- Horas personalizadas 
           <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" name="request_unit_hours" id="request_unit_hours" t-att-checked="leave.request_unit_hours"/>
             <label class="form-check-label" for="request_unit_hours">Horas personalizadas</label>
@@ -113,7 +93,7 @@
                 <input type="number" step="0.01" name="request_hour_to" class="form-control" t-att-value="leave.request_hour_to"/>
               </div>
             </div>
-
+            -->
           <!-- Descripción -->
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">Descripción</label>
@@ -121,7 +101,22 @@
               <input type="text" name="name" class="form-control" t-att-value="leave.name"/>
             </div>
           </div>
-
+          
+         <!-- Reemplazante -->
+          <div class="mb-3 row">
+            <label class="col-sm-3 col-form-label">Reemplazante</label>
+            <div class="col-sm-9">
+              <select name="x_studio_reemplazante" class="form-select">
+                <option value="">-- Ninguno --</option>
+                <t t-foreach="employees" t-as="emp">
+                  <option t-att-value="emp.id" t-att-selected="leave.x_studio_reemplazante.id == emp.id">
+                    <t t-esc="emp.name"/>
+                  </option>
+                </t>
+              </select>
+            </div>
+          </div>
+          
           <!-- Adjunto -->
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">Justificante</label>
@@ -213,34 +208,26 @@
     const tipoReposoField = document.getElementById('tipo-reposo-field');
     const saldoDiv = document.getElementById('saldo-dinamico');
     const saldoTexto = document.getElementById('saldo-texto');
-    const horasCheckbox = document.getElementById('request_unit_hours');
-    const horasField = document.getElementById('horas-personalizadas-field');
+
     
     function actualizarSaldo(){
         if (balances[leaveTypeSelect.value]) {
           const b = balances[leaveTypeSelect.value];
           let texto = `Total: ${b.max_leaves} | Tomados: ${b.leaves_taken} | Restantes: ${b.virtual_remaining_leaves}`;
           console.log(texto)
-          saldoTexto.textContent = texto;
-          saldoDiv.style.display = 'block';
+          if (b.max_leaves != 'N/A'){
+              saldoTexto.textContent = texto;
+              saldoDiv.style.display = 'block';
+          }
+          else{
+            saldoDiv.style.display = 'none';
+          }
         } else {
           saldoDiv.style.display = 'none';
         }
 
     }
     
-    function toggleHorasPersonalizadas() {
-        if (horasCheckbox.checked) {
-          horasField.style.display = 'flex';
-          horasField.style.alignItems = 'center';
-        } else {
-          horasField.style.display = 'none';
-          // Opcional: limpiar valores
-          horasField.querySelector('[name="request_hour_from"]').value = '';
-          horasField.querySelector('[name="request_hour_to"]').value = '';
-        }
-        }
-
     if (!leaveTypeSelect || !tipoReposoField) return;
 
     function toggleTipoReposo() {
@@ -258,12 +245,10 @@
     // Ejecutar al cargar (por si ya hay un valor preseleccionado)
     toggleTipoReposo();
     actualizarSaldo()
-    toggleHorasPersonalizadas();
 
     // Escuchar cambios
     leaveTypeSelect.addEventListener('change', toggleTipoReposo);
     leaveTypeSelect.addEventListener('change', actualizarSaldo);
-    horasCheckbox.addEventListener('change', toggleHorasPersonalizadas);
   });
 </script>
     </t>
@@ -374,6 +359,23 @@
                     <div class="mt-4">
                         <a href="/permisos" class="btn btn-primary">
                             <i class="fa fa-plus me-1"></i> Solicitar nuevo permiso
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+
+    <template id="leave_success_page" name="Solicitud de Permiso Exitosa">
+        <t t-call="website.layout">
+            <div class="container mt-5">
+                <div class="row justify-content-center">
+                    <div class="col-md-8 text-center">
+                        <h2 class="text-success">¡Solicitud creada con éxito!</h2>
+                        <p class="lead">Su solicitud de permiso ha sido registrada correctamente.</p>
+                        <a href="/mis-permisos" class="btn btn-primary mt-3">
+                            Ver mis permisos
                         </a>
                     </div>
                 </div>

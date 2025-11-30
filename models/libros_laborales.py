@@ -8,6 +8,7 @@ import io
 import xlsxwriter
 import base64
 import logging
+import calendar
 _logger = logging.getLogger(__name__)
 
 class LaborReportWizard(models.TransientModel):
@@ -18,10 +19,25 @@ class LaborReportWizard(models.TransientModel):
         ('book1', 'Planilla Anual Empleados y Obreros'),
         ('book2', 'Planilla Anual Sueldos y Jornales'),
         ('book3', 'Planilla Resumen Gral. De Personas ocupadas'),
+        ('ministerio_planilla', 'Planilla Mensual Ministerio'),
         # Agrega más opciones según tus necesidades
     ], string="Tipo de Reporte", required=True)
     year = fields.Integer(string="Año", required=True, default=lambda self: fields.Date.today().year)
     company_id = fields.Many2one('res.company', string="Compañía", default=lambda self: self.env.company)
+    month = fields.Selection([
+        ('1', 'Enero'),
+        ('2', 'Febrero'),
+        ('3', 'Marzo'),
+        ('4', 'Abril'),
+        ('5', 'Mayo'),
+        ('6', 'Junio'),
+        ('7', 'Julio'),
+        ('8', 'Agosto'),
+        ('9', 'Septiembre'),
+        ('10', 'Octubre'),
+        ('11', 'Noviembre'),
+        ('12', 'Diciembre'),
+    ], string="Mes", required=True, default=lambda self: str(fields.Date.today().month))
     
     def action_generate_report(self):
         """Método que se llamará al hacer clic en el botón Generar"""
@@ -35,6 +51,8 @@ class LaborReportWizard(models.TransientModel):
             return self.generate_planilla_anual_empleados_obreros()
         elif self.report_type == 'book3':
             return self.generate_resumen_personas_ocupadas_excel()
+        elif self.report_type == 'ministerio_planilla':
+            return self.generate_ministerio_planilla_excel_report()
 
     def _generate_book1(self):
         # Lógica específica para el Libro de Asistencias
@@ -625,3 +643,285 @@ class LaborReportWizard(models.TransientModel):
         elif status == 'widowwe':
             return 'V'
         return 'S'
+
+    def generate_ministerio_planilla_excel_report(self):
+        # Paso 1: Buscar payslips del mes/año/compañía seleccionados
+        Payslip = self.env['hr.payslip']
+        domain = [
+            ('date_from', '>=', date(self.year, int(self.month), 1)),
+            ('date_to', '<=', date(self.year, int(self.month), calendar.monthrange(self.year, int(self.month))[1])),
+            ('company_id', '=', self.company_id.id),
+            ('state', 'in', ['done', 'paid'])  # opcional: solo nóminas confirmadas
+        ]
+        payslips = Payslip.search(domain)
+    
+        if not payslips:
+            raise UserError("No se encontraron nóminas para el mes y año seleccionados.")
+    
+        # Validar que todos los payslips pertenezcan al mismo mes/año (redundante, pero seguro)
+        first = payslips[0]
+        for slip in payslips:
+            if slip.date_from.month != first.date_from.month or slip.date_from.year != first.date_from.year:
+                raise UserError("Inconsistencia en fechas de nóminas.")
+    
+        # Ahora llama a una versión modificada de tu lógica original
+        return self._generate_ministerio_excel_from_payslips(payslips)
+
+
+    def _generate_ministerio_excel_from_payslips(self, payslips):
+        if not payslips:
+            return
+    
+        first_slip = payslips[0]
+        first_month = first_slip.date_from.month
+        first_year = first_slip.date_from.year
+    
+        for slip in payslips:
+            if slip.date_from.month != first_month or slip.date_from.year != first_year:
+                raise UserError("Todos los payslips deben pertenecer al mismo mes y año...")
+    
+        company = first_slip.company_id
+        date_from = first_slip.date_from
+        date_to = first_slip.date_to
+        year = date_from.year
+        month = date_from.strftime('%B').capitalize()
+        month_num = date_from.month
+        num_days_in_month = calendar.monthrange(year, month_num)[1]
+
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+        worksheet = workbook.add_worksheet('Planilla Mensual')
+    
+        # Configurar hoja A4 horizontal
+        worksheet.set_landscape()
+        worksheet.set_paper(9)  # A4
+    
+        # Formatos
+        bold = workbook.add_format({'bold': True})
+        bold_center = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter'})
+        center = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+        normal = workbook.add_format({'border': 1})
+        footer = workbook.add_format({'italic': True})
+    
+        # ===== ENCABEZADO =====
+        worksheet.merge_range('A1:K1', f'Razon Social: {company.name}', bold)
+        worksheet.merge_range('L1:R1', 'Nro.Patronal IPS:', bold)
+    
+        worksheet.merge_range('A2:K2', f'Empleador: {company.name}', bold)
+        worksheet.merge_range('L2:R2', 'Nro.Patronal MTESS:', bold)
+    
+        worksheet.merge_range('A3:K3', 'Actividad: Analisis Clinicos', bold)  # Ajustar si necesario
+        worksheet.merge_range('L3:R3', f'RUC: {company.vat or ""}', bold)
+    
+        worksheet.merge_range('A4:K4', f'Domicilio: {company.street or ""}', bold)
+        worksheet.merge_range('L4:R4', f'Telefono: {company.phone or ""}', bold)
+    
+        worksheet.write('A5', 'Año:', bold)
+        worksheet.write('B5', str(year), bold)
+        worksheet.merge_range('L5:R5', 'Pagina:', bold)
+    
+        worksheet.write('A6', 'Mes:', bold)
+        worksheet.write('B6', month, bold)
+        worksheet.merge_range('L6:R6', f'Correo: {company.email or ""}', bold)
+    
+        # Salto visual
+        current_row = 8
+    
+        # ===== ENCABEZADOS DE COLUMNA =====
+        day_headers = [str(d) for d in range(1, num_days_in_month + 1)]
+        
+        # Iniciales de los días
+        DAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+        day_initials = []
+        for day in range(1, num_days_in_month + 1):
+            d = date(year, month_num, day)
+            day_initials.append(DAY_INITIALS[d.weekday()])
+        
+        # Estructura de bloques finales
+        final_sections = [
+            ('SALARIO', 2),
+            ('HORAS EXTRAS', 6),
+            ('BENEFICIOS SOCIALES', 4),
+            ('Total General', 1),
+        ]
+        
+        # Construir listas
+        basic_cols = 3
+        main_headers = ['Nro. Orden', 'C.I.', 'Apellidos y Nombre'] + day_headers
+        sub_headers = ['', '', ''] + day_initials
+        
+        start_final = basic_cols + num_days_in_month
+        main_header_positions = []
+        current_col = start_final
+        
+        # Agregar subtítulos reales
+        sub_headers.extend([
+            'Forma pago','Importe Unitario', 'Días Trab.','Hora Trab.','Importe',
+            'Cant. 50%', 'Cant. 100%', 'Cant. 130%',
+            'Imp. 50%', 'Imp. 100%', 'Imp. 130%',
+            'Vacación', 'Bonif. Fam.', 'Aguinaldo', 'Otros',
+            'Total'
+        ])
+        
+        # Preparar posiciones para merge
+        for title, width in final_sections:
+            main_header_positions.append((current_col, current_col + width - 1))
+            current_col += width
+        
+        # Escribir encabezados
+        for col in range(basic_cols + num_days_in_month):
+            worksheet.write(current_row, col, main_headers[col], bold_center)
+        
+        # Fusionar bloques finales
+        for (start, end), (title, _) in zip(main_header_positions, final_sections):
+            worksheet.merge_range(current_row, start, current_row, end, title, bold_center)
+        
+        current_row += 1
+        
+        # Subtítulos
+        for col, val in enumerate(sub_headers):
+            worksheet.write(current_row, col, val, bold_center)
+        
+        current_row += 1
+        # ===== MAPEO DE CÓDIGOS (ajusta según tus reglas salariales) =====
+        CODE_MAP = {
+            'VACACIONES': 'V',
+            'FERIADO': 'F',
+            'DOMINGO': 'D',
+            'PERMISO': 'P',
+            'REPOSO': 'R',
+            # Agrega más si usas otros códigos
+        }
+    
+        # Función auxiliar: determinar código para un día
+        def get_day_code(entries, day_date):
+            # Buscar en worked_days_line_ids
+            for entry in entries:
+                _logger.info(f"Discriminado {entry}- {entry.date_start.date()}")
+                _logger.info(f"Fecha: {day_date}")
+                if entry.date_start.date() == day_date:
+                    _logger.info(f"Dia de trabajo {entry}")
+                    if entry.work_entry_type_id.code == 'LEAVE120':
+                        return 'V'
+                    if entry.work_entry_type_id.code == 'LEAVE110':
+                        return 'P'
+                    if entry.work_entry_type_id.code == 'WORK100':
+                        return '8'
+            return ''  # Ausente o no registrado
+        # ===== DATOS DE EMPLEADOS =====
+        for idx, slip in enumerate(payslips, 1):
+            employee = slip.employee_id
+            ci = employee.identification_id or ''
+            name = employee.name or ''
+            work_entries = self.get_work_entries(employee,slip.date_from,slip.date_to)
+            _logger.info(work_entries)
+            # Rellenar días del mes
+            days_data = []
+            current = date_from
+            while current <= date_to:
+                day_code = get_day_code(work_entries, current)
+                if day_code == '' and current.weekday() == 6:  # 6 = domingo en Python (lunes=0, ..., domingo=6)
+                    day_code = 'D'
+                days_data.append(day_code)
+                current += timedelta(days=1)
+            # Obtener montos (ajusta códigos según tu nómina)
+            def get_amount(code):
+                line = slip.line_ids.filtered(lambda l: l.code == code)
+                return line[0].amount if line else 0.0
+            def get_qty(code):
+                line = slip.worked_days_line_ids.filtered(lambda l: l.code == code)
+                if line.code == 'WORK100':
+                    return line[0].number_of_days if line else 0.0
+                return line[0].number_of_hours if line else 0.0
+            salario = get_amount('BASIC')
+            salario_dia = slip.contract_id.wage / 30 if slip.contract_id.wage else 0
+            
+            he_50_qty = get_qty('OVERTIME_EVENING') or 0
+            he_100_qty = get_qty('WORK100') or 0
+            hours_worked = he_100_qty * 8
+            he_130_qty = get_qty('OVERTIME_NIGHT') or 0
+            he_50_amt = get_amount('HEX50')
+            he_100_amt = get_amount('HNOC30')
+            he_130_amt = get_amount('HNOC30')
+            
+            vacacion = get_amount('VACACIONES')
+            bonif_fam = get_amount('BONIF_FAMILIAR')
+            aguinaldo = get_amount('AGUINALDO')
+            otros = 0.0  # o suma de otros beneficios
+    
+            total_general = get_amount('NET')
+            # Construir fila
+            row = [
+                idx,
+                ci,
+                name,
+                *days_data,
+                'M',
+                salario_dia,
+                he_100_qty,
+                hours_worked,
+                salario,
+                he_50_qty, '', he_130_qty,
+                he_50_amt, '', he_130_amt,
+                vacacion, bonif_fam, aguinaldo,otros,
+                total_general,
+            ]
+    
+            # Escribir fila
+            for col, val in enumerate(row):
+                if col < 3 or 3 <= col <= 33:  # Nro, CI, Nombre, Días 1-31
+                    worksheet.write(current_row, col, val, center)
+                else:
+                    if isinstance(val, float) and val == 0.0:
+                        val = ''
+                    worksheet.write(current_row, col, val, normal)
+    
+            current_row += 1
+        day_start_col = 3
+        day_end_col = 2 + num_days_in_month  # ej: si 30 días → col 32
+        
+        # Ajustar anchos
+        worksheet.set_column(0, 0, 10)   # Nro
+        worksheet.set_column(1, 1, 12)   # CI
+        worksheet.set_column(2, 2, 25)   # Nombre
+        worksheet.set_column(day_start_col, day_end_col, 4)  # Días
+        
+        # El resto (datos finales)
+        final_start_col = day_end_col + 1
+        total_cols = len(main_headers)
+        if total_cols > final_start_col:
+            worksheet.set_column(final_start_col, total_cols - 1, 10)
+        # Cerrar y devolver
+        workbook.close()
+        output.seek(0)
+        file_data = base64.b64encode(output.read())
+        output.close()
+    
+        filename = f"Planilla_Ministerio_{year}_{month}.xlsx"
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': file_data,
+            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+    
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
+
+
+
+    def get_work_entries(self, employee, initial_date=False, stop_date=False):
+        domain = [('employee_id', '=', employee.id)]
+        if initial_date:
+            # Asumiendo que 'initial_date' es una fecha y quieres filtrar por fecha de inicio o similar
+            # Ajusta el campo de fecha según tu modelo (por ejemplo: 'date_start', 'date', etc.)
+            domain += [('date_start', '>=', initial_date)]
+        if stop_date:
+            # Asumiendo que 'initial_date' es una fecha y quieres filtrar por fecha de inicio o similar
+            # Ajusta el campo de fecha según tu modelo (por ejemplo: 'date_start', 'date', etc.)
+            domain += [('date_stop', '<=', stop_date)]
+        work_entries = self.env['hr.work.entry'].search(domain)
+        return work_entries

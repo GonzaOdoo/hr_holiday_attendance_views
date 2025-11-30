@@ -13,8 +13,8 @@
                     <div class="page">
                         <!-- Primer recibo (índice i) -->
                         <t t-set="first" t-value="payslips[i]"/>
-                        <div style="height: 170mm; padding: 3mm 5mm; border-bottom: 1px dashed #ccc;">
-                            <div style="height:85mm;overflow:hidden;">
+                        <div style="height: 170mm; padding: 3mm 5mm; border-bottom: 1px dashed #ccc;overflow:hidden">
+                            <div style="height:86mm;overflow:hidden;">
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -208,7 +208,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div style="height:85mm;overflow:hidden;">
+                            <div style="height:86mm;overflow:hidden;">
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -404,10 +404,10 @@
                             </div>
                         </div>
                         <!-- Segundo recibo (índice i+1) -->
-                        <div style="height: 170mm; padding: 3mm 5mm;">
+                        <div style="height: 171mm; padding: 3mm 5mm; overflow:hidden">
                             <t t-if="i + 1 &lt; len(payslips)">
                                 <t t-set="first" t-value="payslips[i + 1]"/>
-                                <div style="height:85mm;overflow:hidden;">
+                                <div style="height:86mm;overflow:hidden;">
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -601,7 +601,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div style="height:85mm;overflow:hidden;">
+                            <div style="height:86mm;overflow:hidden;">
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">

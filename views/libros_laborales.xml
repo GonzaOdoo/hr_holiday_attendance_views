@@ -8,6 +8,7 @@
                 <group>
                     <field name="report_type" widget="selection"/>
                     <field name="year"/>
+                    <field name="month" invisible="report_type != 'ministerio_planilla'"/>
                 </group>
                 <footer>
                     <button name="action_generate_report" string="Generar" type="object"
