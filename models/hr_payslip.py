@@ -167,10 +167,37 @@ class HrContract(models.Model):
         work_hours_ordered = sorted(work_hours.items(), key=lambda x: x[1])
         biggest_work = work_hours_ordered[-1][0] if work_hours_ordered else 0
         add_days_rounding = 0
-    
+        is_final_liquidation = self.struct_id.is_final_liquidation
         # === Paso 1: Calcular todas las ausencias (incluyendo no justificadas) ===
         leave_days = 0
-    
+        payslip_start = self.date_from
+        payslip_end = self.date_to
+        contract = self.contract_id
+        
+        # Asumimos siempre 30 días base
+        base_days = 30.0
+        days_outside_contract = 0.0
+        
+        if contract:
+            contract_start = contract.date_start
+            contract_end = contract.date_end or payslip_end  # si no termina, cubre hasta el fin del período
+        
+            # Días al inicio del período que están ANTES del inicio del contrato
+            if payslip_start < contract_start:
+                # Contar días desde payslip_start hasta contract_start - 1
+                gap_start = payslip_start
+                gap_end = min(contract_start - timedelta(days=1), payslip_end)
+                if gap_end >= gap_start:
+                    days_outside_contract += (gap_end - gap_start).days + 1
+        
+            # Días al final del período que están DESPUÉS del fin del contrato
+            if contract_end < payslip_end:
+                gap_start = max(contract_end + timedelta(days=1), payslip_start)
+                gap_end = payslip_end
+                if gap_end >= gap_start:
+                    days_outside_contract += (gap_end - gap_start).days + 1
+        _logger.info(days_outside_contract)
+        max_workable_days = max(0.0, base_days - days_outside_contract)
         # a) Ausencias ya registradas (is_leave = True en work_hours)
         for work_entry_type_id, hours in work_hours.items():
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
@@ -193,7 +220,13 @@ class HrContract(models.Model):
             add_days_rounding += (days - day_rounded)
     
             if work_entry_type.code == 'WORK100':
-                day_rounded = max(0, 30 - round(leave_days, 5))
+                if is_final_liquidation:
+                    day_rounded = self._round_days(work_entry_type, days)
+                else:
+                    # Nómina normal: 30 días base, menos días fuera de contrato, menos ausencias
+                    effective_base = max_workable_days - leave_days
+                    day_rounded = max(0, round(effective_base, 5))
+                    day_rounded = self._round_days(work_entry_type, day_rounded)
             if work_entry_type.code in ['OVERTIME_EVENING', 'OVERTIME_NIGHT', 'OVERTIME']:
                 _logger.info("Overtime!")
                 day_rounded = 0
@@ -226,7 +259,7 @@ class HrContract(models.Model):
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
 
     def _get_unjustified_absence_days(self, hours_per_day):
-        """Devuelve el número de días laborables sin ninguna entrada de trabajo."""
+        """Devuelve el número de días laborables SIN entrada de trabajo DENTRO de la vigencia del contrato."""
         employee = self.employee_id
         contract = self.contract_id
         calendar = contract.resource_calendar_id or employee.resource_calendar_id or self.env.company.resource_calendar_id
@@ -234,15 +267,20 @@ class HrContract(models.Model):
         if not (calendar and employee.resource_id):
             return 0
     
+        # → Usar rango efectivo del contrato en lugar del período completo de la nómina
+        effective_start, effective_end = self._get_contract_effective_dates()
+        if effective_start > effective_end:
+            return 0  # No hay días dentro del contrato
+    
         tz_name = calendar.tz or 'UTC'
         tz = pytz.timezone(tz_name)
     
-        dt_from = fields.Datetime.to_datetime(self.date_from)
-        dt_to = fields.Datetime.to_datetime(self.date_to)
+        dt_from = fields.Datetime.to_datetime(effective_start)
+        dt_to = fields.Datetime.to_datetime(effective_end)
         local_from = tz.localize(dt_from.replace(hour=0, minute=0, second=0))
         local_to = tz.localize(dt_to.replace(hour=23, minute=59, second=59))
     
-        # Días laborables según calendario (excluye fines de semana y feriados)
+        # Días laborables según calendario DENTRO del rango efectivo
         intervals = calendar._work_intervals_batch(local_from, local_to, resources=employee.resource_id)
         workable_dates = set()
         for start, stop, _ in intervals.get(employee.resource_id.id, []):
@@ -254,19 +292,22 @@ class HrContract(models.Model):
         if not workable_dates:
             return 0
     
-        # Días con alguna entrada de trabajo (cualquier tipo)
+        # Días con alguna entrada de trabajo (cualquier tipo) en el MISMO rango
         work_entries = self.env['hr.work.entry'].search([
             ('employee_id', '=', employee.id),
-            ('date_stop', '>=', self.date_from),
-            ('date_start', '<=', self.date_to),
+            ('date_stop', '>=', effective_start),
+            ('date_start', '<=', effective_end),
         ])
         covered_dates = set()
         for we in work_entries:
-            start_local = pytz.utc.localize(we.date_start).astimezone(tz).date()
-            stop_local = pytz.utc.localize(we.date_stop).astimezone(tz).date()
+            start_utc = we.date_start
+            stop_utc = we.date_stop
+            start_local = pytz.utc.localize(start_utc).astimezone(tz).date()
+            stop_local = pytz.utc.localize(stop_utc).astimezone(tz).date()
             d = start_local
             while d <= stop_local:
-                covered_dates.add(d)
+                if effective_start <= fields.Date.from_string(str(d)) <= effective_end:
+                    covered_dates.add(d)
                 d += timedelta(days=1)
     
         unjustified = workable_dates - covered_dates
@@ -356,6 +397,27 @@ class HrContract(models.Model):
         ('11', 'Noviembre'),
         ('12', 'Diciembre')
     ], string='Mes del período', default=_get_default_month)
+
+    def _get_contract_effective_dates(self):
+        """Devuelve (effective_start, effective_end) del contrato dentro del período de la nómina."""
+        payslip_start = self.date_from
+        payslip_end = self.date_to
+        contract = self.contract_id
+    
+        if not contract:
+            return payslip_start, payslip_end
+    
+        contract_start = contract.date_start
+        contract_end = contract.date_end or payslip_end
+    
+        effective_start = max(payslip_start, contract_start)
+        effective_end = min(payslip_end, contract_end)
+    
+        if effective_start > effective_end:
+            # Contrato totalmente fuera del período → rango vacío
+            return payslip_start, payslip_start - timedelta(days=1)  # rango inválido
+    
+        return effective_start, effective_end
 
     def format_amount(self, amount):
         """Formatea un número como NN.NNN.NNN (SIN decimales, siempre)"""
