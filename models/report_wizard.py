@@ -97,8 +97,8 @@ class HrPayrollReport(models.Model):
                 fake_patronal.ljust(10) +
                 numero_asegurado.ljust(10,'0') +
                 cedula +
-                apellidos +
                 nombres +
+                apellidos +
                 categoria +
                 dias_trabajados +
                 salario_imponible +
@@ -155,7 +155,7 @@ class HrPayrollReport(models.Model):
     
             # Formateo de campos con ancho fijo
             ci = str(employee.identification_id or "").strip()
-            debito =  str(employee.bank_account_id.acc_number or "012345541507")
+            debito =  str(employee.company_id.bank_ids[0].acc_number)
             concepto = "15"
             salario_imponible = f"{imponible:010.2f}" # Ej: 000150000 → 1500.00
             aguinaldo = f"NO"  # MMYYYY
