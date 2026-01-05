@@ -169,7 +169,7 @@ class HrLeaveAllocationReport(models.Model):
     
             # 1. Obtener la asignación REAL asociada a este período (igual que en _compute_allocation_data)
             emp = record.employee_id
-            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            start = emp.x_studio_inicio or emp.first_contract_date or emp.create_date.date()
             today = fields.Date.today()
             years_worked = relativedelta(today, start).years
             period_start = start + relativedelta(years=years_worked)
@@ -209,7 +209,7 @@ class HrLeaveAllocationReport(models.Model):
                 continue
     
             # Calcular el período laboral actual del empleado
-            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            start = emp.x_studio_inicio or emp.first_contract_date or emp.create_date.date()
             today = fields.Date.today()
             years_worked = relativedelta(today, start).years
             period_start = start + relativedelta(years=years_worked)
@@ -243,7 +243,7 @@ class HrLeaveAllocationReport(models.Model):
     def _compute_has_allocation(self):
         for record in self:
             emp = record.employee_id
-            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            start = emp.x_studio_inicio or emp.first_contract_date or emp.create_date.date()
             # Calcular el aniversario más reciente (inicio del período laboral actual)
             today = fields.Date.today()
             years_worked = relativedelta(today, start).years
@@ -272,11 +272,11 @@ class HrLeaveAllocationReport(models.Model):
                 e.id AS id,
                 e.id AS employee_id,
                 e.company_id AS company_id,
-                COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date) AS date_start,
+                COALESCE(e.x_studio_inicio, e.first_contract_date, e.create_date::date) AS date_start,
                 CASE
-                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 10 THEN 30
-                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 6 THEN 18
-                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio_neo, e.first_contract_date, e.create_date::date))) >= 1 THEN 12
+                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio, e.first_contract_date, e.create_date::date))) >= 10 THEN 30
+                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio, e.first_contract_date, e.create_date::date))) >= 6 THEN 18
+                    WHEN EXTRACT(YEARS FROM AGE(CURRENT_DATE, COALESCE(e.x_studio_inicio, e.first_contract_date, e.create_date::date))) >= 1 THEN 12
                     ELSE 0
                 END AS computed_days,
                 %(year)s AS year
@@ -304,7 +304,7 @@ class HrLeaveAllocationReport(models.Model):
         for r in records_to_generate:
             emp = r.employee_id
             # 🔁 Calcular fechas directamente (sin método auxiliar)
-            start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+            start = emp.x_studio_inicio or emp.first_contract_date or emp.create_date.date()
             today = fields.Date.today()
             years_worked = relativedelta(today, start).years
             period_start = start + relativedelta(years=years_worked)
@@ -361,7 +361,7 @@ class HrLeaveAllocationReport(models.Model):
         if not emp:
             raise UserError(_("Empleado no definido."))
     
-        start = emp.x_studio_inicio_neo or emp.first_contract_date or emp.create_date.date()
+        start = emp.x_studio_inicio or emp.first_contract_date or emp.create_date.date()
         today = fields.Date.today()
         years_worked = relativedelta(today, start).years
         period_start = start + relativedelta(years=years_worked)
