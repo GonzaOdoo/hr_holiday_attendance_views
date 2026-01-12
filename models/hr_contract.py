@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime,timedelta
 import pytz
+from pytz import timezone
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class HrContract(models.Model):
             # return
 
         # Rangos horarios
-        NIGHT_START = 22  # 10 PM
+        NIGHT_START = 20  # 10 PM
         NIGHT_END = 6     # 6 AM
 
         # === Buscar asistencias en el rango ===
@@ -83,12 +84,23 @@ class HrContract(models.Model):
                 total_guards += hours
 
             # === CASO 2: Es HORA EXTRA (y NO es guardia) ===
-            elif not att.is_guard and att.overtime_hours > 0 and att.overtime_status == 'approved':
-                hour_in = att.check_in.hour
-                if hour_in >= NIGHT_START or hour_in < NIGHT_END:
-                    overtime_night_hours += att.overtime_hours
-                else:
-                    overtime_day_hours += att.overtime_hours
+            elif not att.is_guard and att.validated_overtime_hours > 0 and att.overtime_status == 'approved':
+                # Calcular el rango de las horas extra (asumiendo que están al final)
+                overtime_end = att.check_out
+                overtime_start = overtime_end - timedelta(hours=att.validated_overtime_hours)
+                
+                # Calcular cuántas de esas horas extra son nocturnas (en hora local)
+                night_overtime = self._get_night_hours_between(
+                    overtime_start, 
+                    overtime_end, 
+                    night_start=NIGHT_START, 
+                    night_end=NIGHT_END,
+                    tz_name='America/Asuncion'
+                )
+                day_overtime = att.overtime_hours - night_overtime
+            
+                overtime_night_hours += night_overtime
+                overtime_day_hours += day_overtime
                 total_overtime += att.overtime_hours
 
         # === 1. Aplicar HORAS EXTRA ===
@@ -132,6 +144,68 @@ class HrContract(models.Model):
                 
         else:
             _logger.warning("No se encontró work entry type con código 'LATE_CONFIRMED' para retrasos confirmados.")
+        
+        recargo_nocturno_type = self.env['hr.work.entry.type'].search([('code', '=', 'RECARGON')], limit=1)
+        if recargo_nocturno_type:
+            _logger.info("Inicio cálculo recargo nocturno")
+            total_recargo_nocturno = 0.0
+            NIGHT_START_RECARGO = 20
+            NIGHT_END_RECARGO = 6
+
+            for att in attendances:
+                if not att.check_in or not att.check_out:
+                    continue
+
+                # === Determinar el rango de tiempo VÁLIDO para nómina ===
+                # 1. Horas normales: desde check_in hasta (check_in + contrato.jornada)
+                #    Pero como no siempre tenemos el horario exacto, usamos:
+                #    → Toda la asistencia MENOS las horas extra NO aprobadas.
+                #
+                # Estrategia: descomponer la asistencia en segmentos válidos.
+
+                valid_intervals = []
+
+                # a) Horas normales: asumimos que TODO el tiempo trabajado es normal,
+                #    excepto las horas extra que no estén aprobadas.
+                base_end = att.check_out
+
+                if att.validated_overtime_hours > 0:
+                    if att.overtime_status == 'approved':
+                        # Toda la asistencia es válida
+                        valid_intervals.append((att.check_in, att.check_out))
+                    else:
+                        # Solo es válida la parte NORMAL (sin la extra)
+                        # Asumimos que la hora extra está al final (lo más común)
+                        overtime_duration = timedelta(hours=att.validated_overtime_hours)
+                        _logger.info(overtime_duration)
+                        normal_end = att.check_out - overtime_duration
+                        if normal_end > att.check_in:
+                            valid_intervals.append((att.check_in, normal_end))
+                        # Si no hay tiempo normal, no hay recargo
+                else:
+                    # Sin horas extra: toda la asistencia es válida
+                    valid_intervals.append((att.check_in, att.check_out))
+                    _logger.info(valid_intervals)
+
+                # b) Si es guardia, ya se procesa aparte y no debe duplicarse,
+                #    pero el recargo nocturno SÍ aplica sobre guardias.
+                #    Como ya estás en attendances, y is_guard no excluye,
+                #    lo dejamos incluido (correcto).
+
+                # === Calcular recargo nocturno sobre los intervalos válidos ===
+                for start, end in valid_intervals:
+                    if start >= end:
+                        continue
+
+                    night_hours = self._get_night_hours_between(start, end, NIGHT_START_RECARGO, NIGHT_END_RECARGO)
+                    total_recargo_nocturno += night_hours
+                    _logger.info("Total recargo nocturno")
+                    _logger.info(total_recargo_nocturno)
+            if total_recargo_nocturno > 0:
+                work_data[recargo_nocturno_type.id] = work_data.get(recargo_nocturno_type.id, 0) + total_recargo_nocturno
+                _logger.info("Recargo nocturno procesado: %.2f horas", total_recargo_nocturno)
+        else:
+            _logger.warning("No se encontró work entry type con código 'RECARGON' para recargo nocturno.")
         # === Log final ===
         _logger.info(
             "Horas procesadas - Extra Diurna: %.2f, Extra Nocturna: %.2f, "
@@ -237,3 +311,46 @@ class HrContract(models.Model):
                 work_data[work_entry.work_entry_type_id.id] += work_entry._get_work_duration(date_start, date_stop)
         
         return work_data
+
+
+    def _get_night_hours_between(self, start, end, night_start=20, night_end=6, tz_name='America/Asuncion'):
+        """
+        Calcula horas entre start y end (ambos en UTC) que caen en [20:00–06:00] en la zona horaria dada.
+        """
+        if start >= end:
+            return 0.0
+    
+        tz = timezone(tz_name)
+        # Convertir de UTC a zona local
+        start_local = start.astimezone(tz)
+        end_local = end.astimezone(tz)
+    
+        total = 0.0
+        current = start_local
+        while current < end_local:
+            # Siguiente medianoche en hora local
+            next_midnight = current.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            segment_end = min(end_local, next_midnight)
+    
+            h_in = current.hour + current.minute / 60.0 + current.second / 3600.0
+            if segment_end == next_midnight:
+                h_out = 24.0
+            else:
+                h_out = segment_end.hour + segment_end.minute / 60.0 + segment_end.second / 3600.0
+    
+            # Rango nocturno: 20:00–24:00
+            if h_out > night_start:
+                start_night = max(h_in, float(night_start))
+                end_night = min(h_out, 24.0)
+                if end_night > start_night:
+                    total += end_night - start_night
+    
+            # Rango nocturno: 00:00–06:00 (solo si hay tiempo después de medianoche)
+            if segment_end != next_midnight and segment_end.day > current.day:
+                h_out_early = segment_end.hour + segment_end.minute / 60.0
+                if h_out_early > 0:
+                    total += min(h_out_early, float(night_end))
+    
+            current = segment_end
+    
+        return total

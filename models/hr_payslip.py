@@ -181,7 +181,7 @@ class HrContract(models.Model):
         if contract:
             contract_start = contract.date_start
             contract_end = contract.date_end or payslip_end  # si no termina, cubre hasta el fin del período
-        
+            
             # Días al inicio del período que están ANTES del inicio del contrato
             if payslip_start < contract_start:
                 # Contar días desde payslip_start hasta contract_start - 1
@@ -197,7 +197,15 @@ class HrContract(models.Model):
                 if gap_end >= gap_start:
                     days_outside_contract += (gap_end - gap_start).days + 1
         _logger.info(days_outside_contract)
-        max_workable_days = max(0.0, base_days - days_outside_contract)
+        covered_start = max(payslip_start, contract.date_start)
+        covered_end = min(payslip_end, contract.date_end or payslip_end)
+        
+        if covered_end >= covered_start:
+            days_covered = (covered_end - covered_start).days + 1
+        else:
+            days_covered = 0
+        
+        max_workable_days = min(30.0, days_covered)
         # a) Ausencias ya registradas (is_leave = True en work_hours)
         for work_entry_type_id, hours in work_hours.items():
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
@@ -220,9 +228,6 @@ class HrContract(models.Model):
             add_days_rounding += (days - day_rounded)
     
             if work_entry_type.code == 'WORK100':
-                if is_final_liquidation:
-                    day_rounded = self._round_days(work_entry_type, days)
-                else:
                     # Nómina normal: 30 días base, menos días fuera de contrato, menos ausencias
                     effective_base = max_workable_days - leave_days
                     day_rounded = max(0, round(effective_base, 5))

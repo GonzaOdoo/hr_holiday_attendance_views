@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#Calcula el monto a pagar en las lineas de nomina
 from odoo import models,api
 import logging
 
@@ -12,6 +13,7 @@ class HrPayslipWorkedDays(models.Model):
         overtime_night_type = self.env['hr.work.entry.type'].search([('code', '=', 'OVERTIME_NIGHT')], limit=1)
         guard_day_type = self.env['hr.work.entry.type'].search([('code', '=', 'GUARD_EVENING')], limit=1)
         guard_night_type = self.env['hr.work.entry.type'].search([('code', '=', 'GUARD_NIGHT')], limit=1)
+        recargo_nocturno_type = self.env['hr.work.entry.type'].search([('code', '=', 'RECARGON')], limit=1) 
         regular_work_type = self.env['hr.work.entry.type'].search([('code', '=', 'WORK100')], limit=1)
         late_type = self.env['hr.work.entry.type'].search([('code', '=', 'LATE')], limit=1)
         leave_types = self.env['hr.work.entry.type'].search([('is_leave', '=', True)])
@@ -35,7 +37,7 @@ class HrPayslipWorkedDays(models.Model):
                 continue
 
             # Verificar si es uno de nuestros tipos especiales
-            if wd.work_entry_type_id in (overtime_day_type, overtime_night_type, guard_day_type, guard_night_type):
+            if wd.work_entry_type_id in (overtime_day_type, overtime_night_type, guard_day_type, guard_night_type,recargo_nocturno_type):
                 special_worked_days |= wd
             elif wd.work_entry_type_id == late_type:
                 late_worked_days |= wd
@@ -92,7 +94,7 @@ class HrPayslipWorkedDays(models.Model):
 
             elif wd.work_entry_type_id == overtime_night_type:
                 # HEN = (SH + 30% recargo) * 2 → SH * 1.3 * 2 = SH * 2.6
-                rate = hourly_rate * 2.6
+                rate = hourly_rate * 2.0
                 amount = rate * hours
 
             elif wd.work_entry_type_id == guard_day_type:
@@ -104,7 +106,9 @@ class HrPayslipWorkedDays(models.Model):
                 # GN = 8 horas a tasa de HEN (2.6)
                 rate = hourly_rate * 2.6
                 amount = rate * 8.0  # Guardia nocturna: pago fijo por 8 horas
-
+            elif wd.work_entry_type_id == recargo_nocturno_type:  # ← NUEVO
+                # RECARGO NOCTURNO = SH * 0.30
+                amount = hourly_rate * 0.30 * hours
             wd.amount = amount
             _logger.info(wd.amount)
         # === Calcular deducción por retrasos confirmados ===
