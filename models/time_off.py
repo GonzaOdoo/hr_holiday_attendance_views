@@ -27,6 +27,8 @@ class HrLeave(models.Model):
     )
     allocation_id = fields.Many2one('hr.leave.allocation', string="Asignación de origen")
     replacement = fields.Many2one("hr.employee", string="Reemplazante")
+    reason_text = fields.Text("Motivo del permiso", tracking=True)
+    
     @api.depends('holiday_status_id', 'employee_id', 'request_date_from')
     def _compute_balance_info(self):
         for leave in self:

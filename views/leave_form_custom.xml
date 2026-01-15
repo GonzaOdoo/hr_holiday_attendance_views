@@ -346,7 +346,7 @@
                                                     <t t-if="leave.state == 'cancel'">Cancelado</t>
                                                 </span>
                                             </td>
-                                            <td><t t-out="leave.name or '—'"/></td>
+                                            <td><t t-out="leave.reason_text or '—'"/></td>
                                             <td><t t-out="round(leave.number_of_days, 2)"/></td>
                                         </tr>
                                     </t>

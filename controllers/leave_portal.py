@@ -74,9 +74,7 @@ class LeavePortal(http.Controller):
             'request_hour_from': float(kw.get('request_hour_from') or 0.0),
             'request_hour_to': float(kw.get('request_hour_to') or 0.0),
         }
-    
         leave = request.env['hr.leave'].sudo().new(leave_vals)
-        _logger.info(balances)
         return request.render('hr_holiday_attendance_views.leave_form_custom', {
             'leave': leave,
             'employees': request.env['hr.employee'].sudo().search([('active', '=', True), ('company_id', 'in', [employee.company_id.id, False])]),
@@ -102,31 +100,32 @@ class LeavePortal(http.Controller):
             raise UserError("No tiene un empleado asociado.")
         try:
             # Validar y convertir valores
-            vals = {
-                'employee_id': employee.id,  # ¡El empleado siempre es el del usuario!
-                'replacement': int(post.get('replacement', 0)) if post.get('replacement', 0) else False,
-                'holiday_status_id': int(post['holiday_status_id']),
-                'request_date_from': post['request_date_from'],
-                'request_date_to': post['request_date_to'],
-                'name': post.get('name', ''),
-                'tipo_enfermedad': post.get('tipo_enfermedad', ''),
-            }
-
-            # Crear la solicitud
-            leave = request.env['hr.leave'].sudo().create(vals)
-
-            # Manejar archivo adjunto si existe
-            if 'attachment_ids' in request.httprequest.files:
-                file = request.httprequest.files['attachment_ids']
-                if file.filename:
-                    request.env['ir.attachment'].sudo().create({
-                        'name': file.filename,
-                        'datas': base64.b64encode(file.read()),
-                        'res_model': 'hr.leave',
-                        'res_id': leave.id,
-                    })
-
-            return request.redirect('/permisos/success')
+            with request.env.cr.savepoint():
+                vals = {
+                    'employee_id': employee.id,  # ¡El empleado siempre es el del usuario!
+                    'replacement': int(post.get('replacement', 0)) if post.get('replacement', 0) else False,
+                    'holiday_status_id': int(post['holiday_status_id']),
+                    'request_date_from': post['request_date_from'],
+                    'request_date_to': post['request_date_to'],
+                    'name': post.get('name', ''),
+                    'reason_text': post.get('name', ''),
+                    'tipo_enfermedad': post.get('tipo_enfermedad', ''),
+                }
+                # Crear la solicitud
+                leave = request.env['hr.leave'].sudo().create(vals)
+    
+                # Manejar archivo adjunto si existe
+                if 'attachment_ids' in request.httprequest.files:
+                    file = request.httprequest.files['attachment_ids']
+                    if file.filename:
+                        request.env['ir.attachment'].sudo().create({
+                            'name': file.filename,
+                            'datas': base64.b64encode(file.read()),
+                            'res_model': 'hr.leave',
+                            'res_id': leave.id,
+                        })
+    
+                return request.redirect('/permisos/success')
 
         except (ValidationError, UserError) as e:
             # Extraer solo el mensaje del error y codificarlo correctamente
