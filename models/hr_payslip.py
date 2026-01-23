@@ -163,7 +163,7 @@ class HrContract(models.Model):
         self.ensure_one()
         res = []
         hours_per_day = self._get_worked_day_lines_hours_per_day()
-        work_hours = self.contract_id.get_work_hours(self.date_from, self.date_to, domain=domain)
+        work_hours = self.contract_id.get_work_hours(self.date_from_events, self.date_to_events, domain=domain)
         work_hours_ordered = sorted(work_hours.items(), key=lambda x: x[1])
         biggest_work = work_hours_ordered[-1][0] if work_hours_ordered else 0
         add_days_rounding = 0
@@ -210,9 +210,13 @@ class HrContract(models.Model):
         for work_entry_type_id, hours in work_hours.items():
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
             if work_entry_type.is_leave:
-                days = round(hours / hours_per_day, 5) if hours_per_day else 0
-                day_rounded = self._round_days(work_entry_type, days)
-                leave_days += day_rounded
+                if work_entry_type.code != 'LEAVE90':
+                    days = round(hours / hours_per_day, 5) if hours_per_day else 0
+                    day_rounded = self._round_days(work_entry_type, days)
+                    leave_days += day_rounded
+                else:
+                    days = round(hours / hours_per_day, 5) if hours_per_day else 0
+                    day_rounded = self._round_days(work_entry_type, days)
     
         # b) Ausencias NO JUSTIFICADAS (días laborables sin entrada)
         unjustified_days = self._get_unjustified_absence_days(hours_per_day)
