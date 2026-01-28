@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from dateutil.relativedelta import relativedelta
-
+from datetime import datetime
+import pytz
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -74,23 +75,41 @@ class HrLeave(models.Model):
 
     def _get_durations(self, check_leave_type=True, resource_calendar=None):
         """
-        Sobrescribe el cálculo de duración para usar días calendario completos.
-        Ej: del 1 al 16 de un mes = 16 días.
+        Calcula la duración de la ausencia en días y horas hábiles,
+        usando el calendario laboral del empleado.
         """
         result = {}
         for leave in self:
             if not leave.date_from or not leave.date_to:
                 result[leave.id] = (0, 0)
                 continue
-
-            # Convertir a fechas (ignorar hora)
-            start_date = leave.date_from.date()
-            end_date = leave.date_to.date()
-
-            # Calcular días calendario: incluye ambos extremos
-            days = (end_date - start_date).days + 1
-            hours = days * 24  # opcional: si necesitas horas
-
-            result[leave.id] = (days, hours)
-
+    
+            # Obtener el calendario: preferir el del empleado, luego el parámetro, luego ninguno
+            calendar = leave.employee_id.resource_calendar_id or resource_calendar
+            if not calendar:
+                # Si no hay calendario, fallback a cálculo simple (pero con precisión horaria)
+                duration_days = (leave.date_to - leave.date_from).days
+                duration_hours = (leave.date_to - leave.date_from).total_seconds() / 3600
+                result[leave.id] = (round(duration_days + (duration_hours % 24) / 24, 2), round(duration_hours, 2))
+                continue
+    
+            # Asegurar zonas horarias coherentes (Odoo usa UTC en campos datetime)
+            tz = pytz.timezone(leave.employee_id.tz or 'UTC')
+            start_dt = leave.date_from.astimezone(tz)
+            end_dt = leave.date_to.astimezone(tz)
+    
+            # Calcular horas hábiles según el calendario
+            work_hours = calendar.get_work_hours_count(
+                start_dt=start_dt,
+                end_dt=end_dt,
+                compute_leaves=False  # ya estás en un leave, no contar otros leaves
+            )
+    
+            # Convertir horas hábiles a días hábiles (asumiendo jornada diaria estándar)
+            # Ej: si el calendario tiene 8h/día, 8h = 1 día útil
+            hours_per_day = calendar.hours_per_day or 8.0
+            work_days = work_hours / hours_per_day if hours_per_day else 0
+    
+            result[leave.id] = (round(work_days, 2), round(work_hours, 2))
+    
         return result
