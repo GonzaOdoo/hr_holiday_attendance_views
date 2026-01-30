@@ -210,7 +210,7 @@ class LaborReportWizard(models.TransientModel):
     
         # === ENCABEZADOS COMUNES PARA HOJAS DETALLADAS ===
         headers = [
-            'NRO_PATRONAL', 'DOCUMENTO', 'FORMADEPAGO',
+            'NRO_PATRONAL', 'DOCUMENTO', 'FORMADEPAGO','IMPORTE UNITARIO',
             'H_ENE', 'S_ENE', 'H_FEB', 'S_FEB', 'H_MAR', 'S_MAR', 'H_ABR', 'S_ABR',
             'H_MAY', 'S_MAY', 'H_JUN', 'S_JUN', 'H_JUL', 'S_JUL', 'H_AGO', 'S_AGO',
             'H_SET', 'S_SET', 'H_OCT', 'S_OCT', 'H_NOV', 'S_NOV', 'H_DIC', 'S_DIC',
@@ -270,16 +270,24 @@ class LaborReportWizard(models.TransientModel):
                     company.ips or '',
                     emp.identification_id or '',
                     'M',
-                    *sum([[horas[i], sueldos[i]] for i in range(12)], []),
-                    total_h_50, total_s_50,
-                    total_h_100, total_s_100,
-                    aguinaldo, beneficios, bonificaciones, vacaciones,
-                    total_h, total_s, total_general
+                    '',  # este campo sigue siendo texto vacío si es intencional
+                    *[val for i in range(12) for val in (horas[i] or 0, sueldos[i] or 0)],
+                    total_h_50 or 0,
+                    total_s_50 or 0,
+                    total_h_100 or 0,
+                    total_s_100 or 0,
+                    aguinaldo or 0,
+                    beneficios or 0,
+                    bonificaciones or 0,
+                    vacaciones or 0,
+                    total_h or 0,
+                    total_s or 0,
+                    total_general or 0,
                 ]
     
                 for col, val in enumerate(fila):
                     fmt = center if col < 3 else normal
-                    worksheet.write(row, col, val or '', fmt)
+                    worksheet.write(row, col, val, fmt)
                 row += 1
     
         # Crear hojas por categoría
@@ -463,7 +471,7 @@ class LaborReportWizard(models.TransientModel):
     
             # Escribir fila
             for col, val in enumerate(row):
-                worksheet.write(row_offset, col, val or '', normal)
+                worksheet.write(row_offset, col, val, normal)
         ws_listado = workbook.add_worksheet('LISTADO EMPLEADOS')
         ws_listado.set_landscape()
         ws_listado.set_paper(9)

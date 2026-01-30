@@ -165,6 +165,8 @@ class HrContract(models.Model):
         hours_per_day = self._get_worked_day_lines_hours_per_day()
         work_hours = self.contract_id.get_work_hours(self.date_from_events, self.date_to_events, domain=domain)
         work_hours_ordered = sorted(work_hours.items(), key=lambda x: x[1])
+        _logger.info("Horas de trabajo!")
+        _logger.info(work_hours_ordered)
         biggest_work = work_hours_ordered[-1][0] if work_hours_ordered else 0
         add_days_rounding = 0
         is_final_liquidation = self.struct_id.is_final_liquidation
@@ -206,6 +208,8 @@ class HrContract(models.Model):
             days_covered = 0
         
         max_workable_days = min(30.0, days_covered)
+        _logger.info("Workable days!")
+        _logger.info(max_workable_days)
         # a) Ausencias ya registradas (is_leave = True en work_hours)
         for work_entry_type_id, hours in work_hours.items():
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
@@ -221,7 +225,8 @@ class HrContract(models.Model):
         # b) Ausencias NO JUSTIFICADAS (días laborables sin entrada)
         unjustified_days = self._get_unjustified_absence_days(hours_per_day)
         #leave_days += unjustified_days  # ← ¡Esto es clave!
-    
+        _logger.info("Injustificadas")
+        _logger.info(unjustified_days)
         # === Paso 2: Generar líneas de asistencia ===
         for work_entry_type_id, hours in work_hours_ordered:
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
@@ -275,9 +280,12 @@ class HrContract(models.Model):
     
         if not (calendar and employee.resource_id):
             return 0
-    
+        _logger.info("Calculo de ausencia")
+        _logger.info(calendar)
         # → Usar rango efectivo del contrato en lugar del período completo de la nómina
         effective_start, effective_end = self._get_contract_effective_dates()
+        _logger.info(effective_start)
+        _logger.info(effective_end)
         if effective_start > effective_end:
             return 0  # No hay días dentro del contrato
     
@@ -290,7 +298,10 @@ class HrContract(models.Model):
         local_to = tz.localize(dt_to.replace(hour=23, minute=59, second=59))
     
         # Días laborables según calendario DENTRO del rango efectivo
-        intervals = calendar._work_intervals_batch(local_from, local_to, resources=employee.resource_id)
+        intervals = calendar._work_intervals_batch(local_from, local_to, resources=employee.resource_id, tz=tz)
+        att_intervals = list(intervals.get(employee.resource_id.id, []))
+        _logger.info(intervals)
+        #_logger.info(att_intervals)
         workable_dates = set()
         for start, stop, _ in intervals.get(employee.resource_id.id, []):
             d = start.date()
@@ -300,13 +311,15 @@ class HrContract(models.Model):
     
         if not workable_dates:
             return 0
-    
+        _logger.info(workable_dates)
         # Días con alguna entrada de trabajo (cualquier tipo) en el MISMO rango
         work_entries = self.env['hr.work.entry'].search([
             ('employee_id', '=', employee.id),
-            ('date_stop', '>=', effective_start),
-            ('date_start', '<=', effective_end),
+            ('active', '=', True),
+            ('date_stop', '<=', effective_end),
+            ('date_start', '>=', effective_start),
         ])
+        _logger.info(work_entries)
         covered_dates = set()
         for we in work_entries:
             start_utc = we.date_start
@@ -318,7 +331,7 @@ class HrContract(models.Model):
                 if effective_start <= fields.Date.from_string(str(d)) <= effective_end:
                     covered_dates.add(d)
                 d += timedelta(days=1)
-    
+        _logger.info(covered_dates)
         unjustified = workable_dates - covered_dates
         return len(unjustified)
 
@@ -409,8 +422,8 @@ class HrContract(models.Model):
 
     def _get_contract_effective_dates(self):
         """Devuelve (effective_start, effective_end) del contrato dentro del período de la nómina."""
-        payslip_start = self.date_from
-        payslip_end = self.date_to
+        payslip_start = self.date_from_events
+        payslip_end = self.date_to_events
         contract = self.contract_id
     
         if not contract:

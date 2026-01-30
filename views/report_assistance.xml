@@ -2,136 +2,167 @@
     <!-- Plantilla principal del informe -->
     <template id="report_attendance">
         <t t-call="web.html_container">
-            <t t-call="web.basic_layout">
-                <!-- Agrupamos manualmente los docs en pares -->
-                <t t-set="payslips" t-value="docs"/>
-                
-                <t t-foreach="payslips" t-as="doc">
-                    <div class="page" style="height: 350mm; padding: 3mm 5mm;">
-                        <div class="row" style="margin-bottom: 5px;">
-                            <!-- Logo - Izquierda -->
-                            <div class="col-6" style="display: flex; align-items: center;">
-                                <img t-if="doc.company_id.logo" t-att-src="image_data_uri(doc.company_id.logo)" alt="Logo" style="max-height: 60px; width: auto;margin-top:0px !important;"/>
-                            </div>
-                            <!-- Título y subtítulo - Derecha -->
-                            <div class="col-6" style="text-align: right;">
-                                <h4 style="margin: 0; color: #007cba;">
-                                    Registro de Asistencias
-                                </h4>
-                                <p style="color: #333; font-size: 16px; margin-top: 3px;">
-                                    <span t-out="doc.employee_id.name"/>
-                                </p>
-                            </div>
+        <t t-call="web.basic_layout">
+            <style>
+                .page {
+                    page-break-after: always;
+                    break-after: page;
+                }
+                .page:last-child {
+                    page-break-after: auto;
+                    break-after: auto;
+                }
+                .summary-section {
+                    margin-top: 15px;
+                    padding-top: 10px;
+                    border-top: 2px solid #007cba;
+                }
+                .summary-title {
+                    font-weight: bold;
+                    color: #007cba;
+                    font-size: 14px;
+                    margin-bottom: 8px;
+                }
+                .summary-item {
+                    font-size: 13px;
+                    margin-bottom: 5px;
+                    padding: 3px 0;
+                }
+                .summary-label {
+                    font-weight: 600;
+                    display: inline-block;
+                    width: 200px;
+                }
+                .summary-value {
+                    font-weight: bold;
+                    color: #007cba;
+                }
+            </style>
+            
+            <!-- Agrupamos manualmente los docs en pares -->
+            <t t-set="payslips" t-value="docs"/>
+            
+            <t t-foreach="payslips" t-as="doc">
+                <div class="page" style="height: 340mm; padding: 3mm 5mm; overflow:hidden;">
+                    <div class="row" style="margin-bottom: 5px;">
+                        <!-- Logo - Izquierda -->
+                        <div class="col-6" style="display: flex; align-items: center;">
+                            <img t-if="doc.company_id.logo" t-att-src="image_data_uri(doc.company_id.logo)" alt="Logo" style="max-height: 60px; width: auto;margin-top:0px !important;"/>
                         </div>
+                        <!-- Título y subtítulo - Derecha -->
+                        <div class="col-6" style="text-align: right;">
+                            <h4 style="margin: 0; color: #007cba;">
+                                Registro de Asistencias
+                            </h4>
+                            <p style="color: #333; font-size: 16px; margin-top: 3px;">
+                                <span t-out="doc.employee_id.name"/>
+                            </p>
+                        </div>
+                    </div>
 
-                        <!-- Obtenemos las asistencias del payslip actual -->
-                        <t t-set="all_attendances" t-value="doc._get_attendance_by_payslip().get(doc, doc.env['hr.attendance'])"/>
-                
-                        <!-- Agrupamos asistencias por fecha: fecha -> lista de asistencias -->
-                        <t t-set="attendances_by_date" t-value="{att.check_in.date(): [] for att in all_attendances}"/>
-                        <t t-foreach="all_attendances" t-as="att">
-                            <t t-set="date_key" t-value="att.check_in.date()"/>
-                            <t t-set="current_list" t-value="attendances_by_date[date_key] if date_key in attendances_by_date else []"/>
-                            <t t-set="attendances_by_date" t-value="attendances_by_date.update({date_key: current_list + [att]}) or attendances_by_date"/>
-                        </t>
-                
-                        <!-- Tabla de asistencias por día 
-                        <table class="table table-bordered table-sm" style="font-size: 16px; margin-bottom: 0;">
-                            <thead>
-                                <tr style="height: 20px;">
-                                    <th style="vertical-align: middle;">Fecha</th>
-                                    <th style="vertical-align: middle;">Entrada</th>
-                                    <th style="vertical-align: middle;">Salida</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <t t-foreach="range((doc.date_to - doc.date_from).days + 1)" t-as="i">
-                                    <t t-set="current_date" t-value="doc.date_from + datetime.timedelta(days=i)"/>
-                                    <t t-set="formatted_date" t-value="current_date.strftime('%d/%m/%Y')"/>
-                                    <t t-set="daily_attendances" t-value="attendances_by_date.get(current_date, [])"/>
+                    <!-- Obtenemos las asistencias del payslip actual -->
+                    <t t-set="all_attendances" t-value="doc._get_attendance_by_payslip().get(doc, doc.env['hr.attendance'])"/>
+            
+                    <!-- Agrupamos asistencias por fecha: fecha -> lista de asistencias -->
+                    <t t-set="attendances_by_date" t-value="{att.check_in.date(): [] for att in all_attendances}"/>
+                    <t t-foreach="all_attendances" t-as="att">
+                        <t t-set="date_key" t-value="att.check_in.date()"/>
+                        <t t-set="current_list" t-value="attendances_by_date[date_key] if date_key in attendances_by_date else []"/>
+                        <t t-set="attendances_by_date" t-value="attendances_by_date.update({date_key: current_list + [att]}) or attendances_by_date"/>
+                    </t>
+            
+
+                    <table class="table table-bordered table-sm" style="font-size: 12px; margin-bottom: 0;">
+                        <thead>
+                            <tr>
+                                <th style="vertical-align: middle;">Fecha</th>
+                                <th style="vertical-align: middle;">Entrada</th>
+                                <th style="vertical-align: middle;">Salida</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Iteramos día por día -->
+                            <t t-foreach="range((doc.date_to - doc.date_from).days + 1)" t-as="i">
+                                <t t-set="current_date" t-value="doc.date_from + datetime.timedelta(days=i)"/>
+                                <t t-set="formatted_date" t-value="current_date.strftime('%d/%m/%Y')"/>
+                                <t t-set="daily_attendances" t-value="sorted(attendances_by_date.get(current_date, []), key=lambda a: a.check_in)"/>
                         
-                                    <t t-if="daily_attendances">
-                                        <t t-foreach="daily_attendances" t-as="att">
-                                            <tr style="height: 18px;font-size:12px;">
-                                                <td t-if="att_first" t-att-rowspan="len(daily_attendances)"
-                                                    style="white-space: nowrap;">
-                                                    <span t-esc="formatted_date"/>
-                                                </td>
-                                                <td >
-                                                    <span t-esc="att.check_in.strftime('%H:%M') if att.check_in else '-'"/>
-                                                </td>
-                                                <td >
-                                                    <span t-esc="att.check_out.strftime('%H:%M') if att.check_out else '-'"/>
-                                                </td>
-                                            </tr>
-                                        </t>
-                                    </t>
-                                    
-                                    <t t-else="">
-                                        <tr style="height: 18px;font-size:12px;">
-                                            <td style="padding: 3px; vertical-align: middle;"> <span t-esc="formatted_date"/> </td>
-                                            <td style="padding: 3px; vertical-align: middle; text-align: center;">-</td>
-                                            <td style="padding: 3px; vertical-align: middle; text-align: center;">-</td>
-                                        </tr>
-                                    </t>
-                                </t>
-                            </tbody>
-                        </table>
-                        -->
+                                <tr style="height: 28px;">
+                                    <!-- Fecha -->
+                                    <td style="padding: 4px; vertical-align: middle; white-space: nowrap;">
+                                        <span t-esc="formatted_date"/>
+                                    </td>
                         
-                        <table class="table table-bordered table-sm" style="font-size: 12px; margin-bottom: 0;">
-                            <thead>
+                                    <!-- Generamos hasta 4 segmentos (entrada + salida) -->
+                                    <t t-set="max_slots" t-value="1"/>
+                                    <t t-foreach="range(max_slots)" t-as="idx">
+                                        <t t-set="att" t-value="daily_attendances[idx] if idx &lt; len(daily_attendances) else False"/>
                         
-                                <tr>
-                                    <th style="vertical-align: middle;">Fecha</th>
-                                    <th style="vertical-align: middle;">Entrada</th>
-                                    <th style="vertical-align: middle;">Salida</th>
-                                    <th style="vertical-align: middle;">Entrada</th>
-                                    <th style="vertical-align: middle;">Salida</th>
-                                    <th style="vertical-align: middle;">Entrada</th>
-                                    <th style="vertical-align: middle;">Salida</th>
-                        
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Iteramos día por día -->
-                                <t t-foreach="range((doc.date_to - doc.date_from).days + 1)" t-as="i">
-                                    <t t-set="current_date" t-value="doc.date_from + datetime.timedelta(days=i)"/>
-                                    <t t-set="formatted_date" t-value="current_date.strftime('%d/%m/%Y')"/>
-                                    <t t-set="daily_attendances" t-value="sorted(attendances_by_date.get(current_date, []), key=lambda a: a.check_in)"/>
-                        
-                                    <tr style="height: 28px;">
-                                        <!-- Fecha -->
-                                        <td style="padding: 4px; vertical-align: middle; white-space: nowrap;">
-                                            <span t-esc="formatted_date"/>
+                                        <!-- Entrada -->
+                                        <td style="white-space: nowrap;">
+                                            <span t-if="att" t-esc="att.check_in.strftime('%H:%M') if att.check_in else '-'"/>
+                                            <span t-if="not att">-</span>
                                         </td>
                         
-                                        <!-- Generamos hasta 4 segmentos (entrada + salida) -->
-                                        <t t-set="max_slots" t-value="3"/>
-                                        <t t-foreach="range(max_slots)" t-as="idx">
-                                            <t t-set="att" t-value="daily_attendances[idx] if idx &lt; len(daily_attendances) else False"/>
-                        
-                                            <!-- Entrada -->
-                                            <td style="white-space: nowrap;">
-                                                <span t-if="att" t-esc="att.check_in.strftime('%H:%M') if att.check_in else '-'"/>
-                                                <span t-if="not att">-</span>
-                                            </td>
-                        
-                                            <!-- Salida -->
-                                            <td style="white-space: nowrap;">
-                                                <span t-if="att" t-esc="att.check_out.strftime('%H:%M') if att.check_out else '-'"/>
-                                                <span t-if="not att">-</span>
-                                            </td>
-                                        </t>
-                                    </tr>
-                                </t>
-                            </tbody>
-                        </table>
-                    </div>
-                </t>
+                                        <!-- Salida -->
+                                        <td style="white-space: nowrap;">
+                                            <span t-if="att" t-esc="att.check_out.strftime('%H:%M') if att.check_out else '-'"/>
+                                            <span t-if="not att">-</span>
+                                        </td>
+                                    </t>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
 
+                    <!-- ========================================
+                         RESUMEN GENERAL - Versión Simplificada
+                         ======================================== -->
+                    <div class="row">
+                    <div class="summary-section col-6">
+                        <div class="summary-title">RESUMEN GENERAL</div>
+                        
+                        <!-- Horas Extras - Solo horas -->
+                        <t t-set="total_overtime_hours" t-value="sum(doc.worked_days_line_ids.filtered(lambda l: l.code in ['OVERTIME_EVENING', 'OVERTIME_EVENING_NIGHT', 'OVERTIME']).mapped('number_of_hours'))"/>
+                        <div class="summary-item">
+                            <span class="summary-label">Horas Extras (Total):</span>
+                            <span class="summary-value" t-esc="round(total_overtime_hours, 2)"/> horas
+                        </div>
+                        
+                        <!-- Other Inputs (Deducciones) -->
+                        <t t-set="total_deductions" t-value="sum(doc.input_line_ids.filtered(lambda l: l.code in ['GUARD_DIURNA', 'GUARD_NOCHE', 'PENALTY', 'ADVANCE']).mapped('amount'))"/>
+                        <div class="summary-item">
+                            <span class="summary-label">Guardias:</span>
+                            <span class="summary-value" t-esc="'{:,.0f}'.format(total_deductions)"/>
+                        </div>
+                        
+                        <!-- Ausencias - Solo días -->
+                        <t t-set="total_absence_days" t-value="sum(doc.worked_days_line_ids.filtered(lambda l: l.code in ['UNPAID', 'AUSENCIA', 'UNJUSTIFIED', 'LEAVE']).mapped('number_of_days'))"/>
+                        <div class="summary-item">
+                            <span class="summary-label">Ausencias:</span>
+                            <span class="summary-value" t-esc="round(total_absence_days, 2)"/> días
+                        </div>
+                        
+                        <!-- Tiempos Personales / Reposos - Solo días -->
+                        <t t-set="total_personal_days" t-value="sum(doc.worked_days_line_ids.filtered(lambda l: l.code in ['LEAVE90', 'TIEMPO_PERSONAL', 'BREAK', 'REPOSO']).mapped('number_of_days'))"/>
+                        <div class="summary-item">
+                            <span class="summary-label">Reposos :</span>
+                            <span class="summary-value" t-esc="round(total_personal_days, 2)"/> días
+                        </div>
+                        
+                        
+                    </div>
+                    <!-- ======================================== -->
+                     <div class="summary-section col-6" style="width:48%;height:20%; text-align:center;">
+                         <p style="font-size: 12px; color: #444;margin-top:60px;">_________________________________________</p>
+                         <p style="margin-top: -15px; font-size: 12px; color: #444;" t-esc="doc.employee_id.name"/>
+                    </div>
+                    </div>
+                </div>
             </t>
-         </t>
+
+        </t>
+     </t>
     </template>
 
     <record id="action_report_attendance" model="ir.actions.report">

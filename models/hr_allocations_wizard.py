@@ -132,7 +132,11 @@ class HrLeaveAllocationReport(models.Model):
     employee_id = fields.Many2one('hr.employee', 'Empleado', readonly=True)
     company_id = fields.Many2one('res.company', 'Company', readonly=True)
     date_start = fields.Date('Fecha de inicio', readonly=True)
-    computed_days = fields.Float('Dias disponibles', readonly=True, digits=(16, 2))
+    computed_days = fields.Float('Año actual (Días disponibles segun ley)', readonly=True, digits=(16, 2))
+    days_taken = fields.Float('Días tomados', compute='_compute_allocation_data', store=False, digits=(16, 2))
+    carryover_days = fields.Float('Saldo años anteriores', compute='_compute_allocation_data', store=False, digits=(16, 2))
+    total_available = fields.Float('Total disponible', compute='_compute_allocation_data', store=False, digits=(16, 2))
+    remaining_days = fields.Float('Saldo', compute='_compute_remaining_days')
     has_allocation = fields.Boolean('Asignado', compute='_compute_has_allocation')
     year = fields.Integer('Año', readonly=True)
     year = fields.Integer(default=lambda self: date.today().year, required=True)
@@ -157,6 +161,11 @@ class HrLeaveAllocationReport(models.Model):
         compute='_compute_already_liquidated',
         store=False
     )
+
+    @api.depends('total_available','days_taken')
+    def _compute_remaining_days(self):
+        for record in self:
+            record.remaining_days = record.total_available - record.days_taken
 
     @api.depends('employee_id', 'requires_liquidation')
     def _compute_already_liquidated(self):
@@ -195,49 +204,88 @@ class HrLeaveAllocationReport(models.Model):
                 record.already_liquidated_leave_id = leave
                 record.has_liquidation_leave = True
 
-    @api.depends('has_allocation')
+    @api.depends('employee_id')
     def _compute_allocation_data(self):
         for record in self:
             emp = record.employee_id
             if not emp:
                 record.update({
                     'has_allocation': False,
+                    'days_taken': 0.0,
+                    'carryover_days': 0.0,
+                    'total_available': 0.0,
                     'liquidation_date': False,
                     'available_to_liquidate': 0.0,
                     'requires_liquidation': False,
                 })
                 continue
     
-            # Calcular el período laboral actual del empleado
+            # Calcular período laboral actual
             start = emp.x_studio_inicio or emp.first_contract_date or emp.create_date.date()
             today = fields.Date.today()
             years_worked = relativedelta(today, start).years
             period_start = start + relativedelta(years=years_worked)
             period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
     
-            # Buscar la asignación EXACTA para este período
-            allocation = self.env['hr.leave.allocation'].search([
+            # Buscar asignación ACTUAL para este período
+            current_allocation = self.env['hr.leave.allocation'].search([
                 ('employee_id', '=', emp.id),
                 ('state', 'in', ['confirm', 'validate', 'validate1']),
                 ('date_from', '=', period_start),
                 ('date_to', '=', period_end),
             ], limit=1)
     
-            if allocation:
+            # Calcular días tomados (si existe asignación actual)
+            days_taken = current_allocation.leaves_taken if current_allocation else 0.0
+    
+            # === CÁLCULO DE REMANENTE (carry-over) ===
+            carryover_days = 0.0
+            
+            # Buscar asignación del período ANTERIOR (solo si hay años trabajados > 0)
+            if years_worked > 0:
+                prev_period_start = start + relativedelta(years=years_worked - 1)
+                prev_period_end = prev_period_start + relativedelta(years=1) - relativedelta(days=1)
+                _logger.info(prev_period_start)
+                _logger.info(prev_period_end)
+                _logger.info(emp.name)
+                prev_allocation = self.env['hr.leave.allocation'].search([
+                    ('employee_id', '=', emp.id),
+                    ('state', 'in', ['confirm', 'validate', 'validate1']),
+                    ('date_from', '=', prev_period_start),
+                    ('date_to', '=', prev_period_end),
+                ], limit=1)
+                _logger.info(prev_allocation)
+                if prev_allocation:
+                    # Solo acumular si NO requiere liquidación y tiene carryover habilitado
+                    remaining_days = max(0.0, prev_allocation.number_of_days - prev_allocation.leaves_taken)
+                    # Aplicar límite máximo de carryover si existe
+                    carryover_days = remaining_days
+    
+            # Total disponible para asignar = días legales + remanente
+            total_available = record.computed_days + carryover_days
+    
+            # Datos de liquidación (solo si hay asignación actual)
+            if current_allocation:
                 record.update({
                     'has_allocation': True,
-                    'liquidation_date': allocation.liquidation_date,
-                    'available_to_liquidate': allocation.available_to_liquidate,
-                    'requires_liquidation': allocation.requires_liquidation,
+                    'days_taken': days_taken,
+                    'carryover_days': carryover_days,
+                    'total_available': total_available,
+                    'liquidation_date': current_allocation.liquidation_date,
+                    'available_to_liquidate': current_allocation.available_to_liquidate,
+                    'requires_liquidation': current_allocation.requires_liquidation,
                 })
-                
             else:
                 record.update({
                     'has_allocation': False,
+                    'days_taken': 0.0,
+                    'carryover_days': carryover_days,  # Mostrar remanente incluso sin asignación actual
+                    'total_available': total_available,
                     'liquidation_date': False,
                     'available_to_liquidate': 0.0,
                     'requires_liquidation': False,
                 })
+
                 
 
     def _compute_has_allocation(self):
