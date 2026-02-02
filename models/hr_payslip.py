@@ -9,6 +9,8 @@ import xlsxwriter
 import base64
 import pytz
 import logging
+from calendar import monthrange
+
 _logger = logging.getLogger(__name__)
 
 class HrContract(models.Model):
@@ -177,39 +179,39 @@ class HrContract(models.Model):
         contract = self.contract_id
         
         # Asumimos siempre 30 días base
-        base_days = 30.0
+    
+        # Determinar día final efectivo para cálculo
+        last_day_real = monthrange(payslip_end.year, payslip_end.month)[1]
+        is_full_month_period = (payslip_start.day == 1 and payslip_end.day == last_day_real)
+        
+        # Base fija de 30 días para períodos mensuales completos
+        base_days = 30.0 if is_full_month_period else (payslip_end - payslip_start).days + 1
+        
+        # === Calcular días fuera del contrato (en días calendario reales) ===
         days_outside_contract = 0.0
         
         if contract:
-            contract_start = contract.date_start
-            contract_end = contract.date_end or payslip_end  # si no termina, cubre hasta el fin del período
+            # Días ANTES del inicio del contrato dentro del período de nómina
+            if payslip_start < contract.date_start:
+                gap_end = min(contract.date_start - timedelta(days=1), payslip_end)
+                if gap_end >= payslip_start:
+                    days_outside_contract += (gap_end - payslip_start).days + 1
             
-            # Días al inicio del período que están ANTES del inicio del contrato
-            if payslip_start < contract_start:
-                # Contar días desde payslip_start hasta contract_start - 1
-                gap_start = payslip_start
-                gap_end = min(contract_start - timedelta(days=1), payslip_end)
-                if gap_end >= gap_start:
-                    days_outside_contract += (gap_end - gap_start).days + 1
+            # Días DESPUÉS del fin del contrato dentro del período de nómina
+            if contract.date_end and contract.date_end < payslip_end:
+                gap_start = max(contract.date_end + timedelta(days=1), payslip_start)
+                if payslip_end >= gap_start:
+                    days_outside_contract += (payslip_end - gap_start).days + 1
         
-            # Días al final del período que están DESPUÉS del fin del contrato
-            if contract_end < payslip_end:
-                gap_start = max(contract_end + timedelta(days=1), payslip_start)
-                gap_end = payslip_end
-                if gap_end >= gap_start:
-                    days_outside_contract += (gap_end - gap_start).days + 1
-        _logger.info(days_outside_contract)
-        covered_start = max(payslip_start, contract.date_start)
-        covered_end = min(payslip_end, contract.date_end or payslip_end)
+        _logger.info(f"Días fuera de contrato: {days_outside_contract}")
         
-        if covered_end >= covered_start:
-            days_covered = (covered_end - covered_start).days + 1
-        else:
-            days_covered = 0
+        # === Días cubiertos = Base (30) - Días fuera de contrato ===
+        days_covered = max(0.0, base_days - days_outside_contract)
+        max_workable_days = min(30.0, days_covered)  # Asegurar máximo 30
         
-        max_workable_days = min(30.0, days_covered)
         _logger.info("Workable days!")
         _logger.info(max_workable_days)
+        _logger.info(f"Período: {payslip_start} a {payslip_end} (mes real: {last_day_real} días, base usada: {base_days} días)")
         # a) Ausencias ya registradas (is_leave = True en work_hours)
         for work_entry_type_id, hours in work_hours.items():
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
