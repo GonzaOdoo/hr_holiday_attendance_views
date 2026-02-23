@@ -72,12 +72,12 @@
                     </t>
             
 
-                    <table class="table table-bordered table-sm" style="font-size: 12px; margin-bottom: 0;">
-                        <thead>
+                    <table class="table table-bordered table-sm table-striped" style="font-size: 11px; margin-bottom: 0; width: auto;">
+                        <thead class="thead-light">
                             <tr>
-                                <th style="vertical-align: middle;">Fecha</th>
-                                <th style="vertical-align: middle;">Entrada</th>
-                                <th style="vertical-align: middle;">Salida</th>
+                                <th class="text-center" style="vertical-align: middle; width: 85px; padding: 3px; font-size: 11px;">Fecha</th>
+                                <th class="text-center" style="vertical-align: middle; width: 60px; padding: 3px; font-size: 11px;">Entrada</th>
+                                <th class="text-center" style="vertical-align: middle; width: 60px; padding: 3px; font-size: 11px;">Salida</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -87,9 +87,9 @@
                                 <t t-set="formatted_date" t-value="current_date.strftime('%d/%m/%Y')"/>
                                 <t t-set="daily_attendances" t-value="sorted(attendances_by_date.get(current_date, []), key=lambda a: a.check_in)"/>
                         
-                                <tr style="height: 28px;">
+                                <tr style="height: 26px;">
                                     <!-- Fecha -->
-                                    <td style="padding: 4px; vertical-align: middle; white-space: nowrap;">
+                                    <td class="text-center" style="padding: 3px; vertical-align: middle; white-space: nowrap; width: 185px; font-size: 11px;">
                                         <span t-esc="formatted_date"/>
                                     </td>
                         
@@ -99,13 +99,13 @@
                                         <t t-set="att" t-value="daily_attendances[idx] if idx &lt; len(daily_attendances) else False"/>
                         
                                         <!-- Entrada -->
-                                        <td style="white-space: nowrap;">
+                                        <td class="text-center" style="white-space: nowrap; width: 160px; padding: 3px; font-size: 11px;">
                                             <span t-if="att" t-esc="att.check_in.strftime('%H:%M') if att.check_in else '-'"/>
                                             <span t-if="not att">-</span>
                                         </td>
                         
                                         <!-- Salida -->
-                                        <td style="white-space: nowrap;">
+                                        <td class="text-center" style="white-space: nowrap; width: 160px; padding: 3px; font-size: 11px;">
                                             <span t-if="att" t-esc="att.check_out.strftime('%H:%M') if att.check_out else '-'"/>
                                             <span t-if="not att">-</span>
                                         </td>
@@ -140,14 +140,14 @@
                         <t t-set="total_absence_days" t-value="sum(doc.worked_days_line_ids.filtered(lambda l: l.code in ['UNPAID', 'AUSENCIA', 'UNJUSTIFIED', 'LEAVE']).mapped('number_of_days'))"/>
                         <div class="summary-item">
                             <span class="summary-label">Ausencias:</span>
-                            <span class="summary-value" t-esc="round(total_absence_days, 2)"/> días
+                            <span class="summary-value" t-esc="int(round(total_absence_days, 0))"/> días
                         </div>
                         
                         <!-- Tiempos Personales / Reposos - Solo días -->
                         <t t-set="total_personal_days" t-value="sum(doc.worked_days_line_ids.filtered(lambda l: l.code in ['LEAVE90', 'TIEMPO_PERSONAL', 'BREAK', 'REPOSO']).mapped('number_of_days'))"/>
                         <div class="summary-item">
                             <span class="summary-label">Reposos :</span>
-                            <span class="summary-value" t-esc="round(total_personal_days, 2)"/> días
+                            <span class="summary-value" t-esc="int(round(total_personal_days, 0))"/> días
                         </div>
                         
                         

@@ -341,6 +341,7 @@
                                                     'badge bg-secondary': leave.state == 'cancel'
                                                 }">
                                                     <t t-if="leave.state == 'confirm'">Pendiente</t>
+                                                    <t t-if="leave.state == 'validate1'">Segunda aprobación</t>
                                                     <t t-if="leave.state == 'validate'">Aprobado</t>
                                                     <t t-if="leave.state == 'refuse'">Rechazado</t>
                                                     <t t-if="leave.state == 'cancel'">Cancelado</t>
