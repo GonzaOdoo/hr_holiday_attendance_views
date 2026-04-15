@@ -120,3 +120,9 @@ class HrLeaveAllocation(models.Model):
                 'sticky': False,
             }
         }
+
+
+class HrLeaveType(models.Model):
+    _inherit = 'hr.leave.type'
+
+    shift_change = fields.Boolean('Cambio de horario')
