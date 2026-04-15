@@ -2,7 +2,7 @@
 <odoo>
     <!-- Plantilla principal del informe -->
     <template id="report_payslip_two_per_page">
-       <t t-call="web.html_container">
+              <t t-call="web.html_container">
             <t t-call="web.basic_layout">
                 <style>
                     .page {
@@ -181,7 +181,10 @@
                                                                 <t t-esc="line.name"/>
                                                             </td>
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
                                                             </td>
                                                         </tr>
                                                     </t>
@@ -190,7 +193,7 @@
                                             <tfoot>
                                                 <!-- Total Descuentos -->
                                                 <tr>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
@@ -381,7 +384,10 @@
                                                                 <t t-esc="line.name"/>
                                                             </td>
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
                                                             </td>
                                                         </tr>
                                                     </t>
@@ -390,7 +396,7 @@
                                             <tfoot>
                                                 <!-- Total Descuentos -->
                                                 <tr>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
@@ -558,13 +564,13 @@
                                                 </t>
                                             </tbody>
                                             <tfoot>
-                                                <!-- Total Salario -->
+                                                <!-- Total Descuentos -->
                                                 <tr>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
-                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -576,7 +582,7 @@
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
                                         <table style="width: 100%; border-collapse: collapse;">
                             
-                                            <tbody>
+                                           <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
                                                 <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
                                                     <t t-if="line.amount != 0">
@@ -586,7 +592,10 @@
                                                                 <t t-esc="line.name"/>
                                                             </td>
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
                                                             </td>
                                                         </tr>
                                                     </t>
@@ -758,13 +767,13 @@
                                                 </t>
                                             </tbody>
                                             <tfoot>
-                                                <!-- Total Salario -->
+                                                <!-- Total Descuentos -->
                                                 <tr>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
-                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -786,7 +795,10 @@
                                                                 <t t-esc="line.name"/>
                                                             </td>
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
                                                             </td>
                                                         </tr>
                                                     </t>
