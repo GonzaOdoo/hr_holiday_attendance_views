@@ -20,6 +20,7 @@
             'views/leave_form_custom.xml',
             'views/hr_leave_allocation_views.xml',
             'views/libros_laborales.xml',
+            'views/shift_wizard.xml',
             'security/ir.model.access.csv'],
     "assets": {},
     "license": "LGPL-3",

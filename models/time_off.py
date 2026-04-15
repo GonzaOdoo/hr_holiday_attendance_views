@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
+from odoo.exceptions import UserError,ValidationError
 import pytz
 import logging
 
@@ -29,7 +30,11 @@ class HrLeave(models.Model):
     allocation_id = fields.Many2one('hr.leave.allocation', string="Asignación de origen")
     replacement = fields.Many2one("hr.employee", string="Reemplazante")
     reason_text = fields.Text("Motivo del permiso", tracking=True)
- 
+    shift_start = fields.Float("Hora de entrada")
+    shift_end = fields.Float("Hora de salida")
+    calendar_days = fields.Many2one('resource.calendar',string='Horario definido')
+    shift_change = fields.Boolean(string='Cambio de horario',related='holiday_status_id.shift_change')
+     
     @api.depends('holiday_status_id', 'employee_id', 'request_date_from')
     def _compute_balance_info(self):
         for leave in self:
@@ -72,6 +77,26 @@ class HrLeave(models.Model):
             current -= timedelta(days=1)
         return date_in_month.replace(day=1)  # fallback
 
+    @api.constrains('holiday_status_id', 'shift_start', 'shift_end')
+    def _check_shift_hours(self):
+        for rec in self:
+            if rec.holiday_status_id.shift_change:
+
+                if not rec.shift_start or not rec.shift_end:
+                    raise ValidationError(_(
+                        "Debe completar la hora de entrada y salida para este tipo de tiempo personal."
+                    ))
+
+                duration = rec.shift_end - rec.shift_start
+
+                if duration < 0:
+                    duration += 24
+
+                if duration < 7 or duration > 9:
+                    raise ValidationError(_(
+                        "El rango horario debe estar entre 7 y 9 horas."
+                    ))
+
 
     def _get_durations(self, check_leave_type=True, resource_calendar=None):
         """
@@ -113,3 +138,55 @@ class HrLeave(models.Model):
             result[leave.id] = (round(work_days, 2), round(work_hours, 2))
     
         return result
+
+
+    def action_validate(self,check_state=True):
+        res = super().action_validate(check_state=True)
+
+        for leave in self:
+            # Solo si es cambio de horario
+            if leave.holiday_status_id.shift_change:
+                if not leave.calendar_days:
+                    raise UserError("Debe elegir una planilla horaria antes de confirmar un cambio de turno")
+                employee = leave.employee_id
+                self.env['hr.employee.shift.change'].create({
+                    'employee_id': employee.id,
+                    'leave_id': leave.id,
+                    'calendar_id': leave.calendar_days.id,
+                    'date_start': leave.date_from,
+                    'date_end': leave.date_to,
+                })
+        return res
+
+    def action_refuse(self):
+        res = super().action_refuse()
+    
+        for leave in self:
+            if leave.holiday_status_id.shift_change:
+                leave.employee_id.write({
+                    'extra_calendar_id': False,
+                    'extra_calendar_start': False,
+                    'extra_calendar_end': False,
+                })
+    
+        return res
+        
+    def action_validate_change_calendar(self):
+        self.ensure_one()
+    
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Aprobar cambio de horario',
+            'res_model': 'hr.leave.shift.change.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_leave_id': self.id,
+                'default_calendar_days': self.calendar_days.id,
+                'default_shift_start': self.shift_start,
+                'default_shift_end': self.shift_end,
+                'default_employee_id':self.employee_id.id,
+                'default_date_from':self.date_from,
+                'default_date_to':self.date_to,
+            }
+        }

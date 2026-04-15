@@ -22,8 +22,13 @@
                     <div class="page">
                         <!-- Primer recibo (índice i) -->
                         <t t-set="first" t-value="payslips[i]"/>
-                        <div style="height: 170mm; padding: 3mm 5mm; border-bottom: 1px dashed #ccc;">
-                            <div style="height:85mm;overflow:hidden;">
+                        <div style="height: 170mm; padding: 3mm 5mm; border-bottom: 1px dashed #ccc;overflow:hidden">
+                            <div style="height:86mm;overflow:hidden;position:relative">
+                                <t t-if="not first.paid_date">
+                                    <div style="                                         position: absolute;                                         width: 100%;                                         height: 86mm;                                         margin-left:250px;                                         -webkit-transform: rotate(-20deg);                                           -moz-transform: rotate(-20deg);                                            -ms-transform: rotate(-20deg);                                             -o-transform: rotate(-20deg);                                                transform: rotate(-20deg);                                         pointer-events: none;                                         z-index: 0;                                     ">
+                                        <span style="padding-top:100px;                                             font-size: 65px;                                             font-weight: bold;                                             color: rgba(0, 102, 204, 0.25);                                             letter-spacing: 8px;                                             opacity: 0.8;                                         ">NO PAGADO</span>
+                                    </div>
+                                    </t>
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -35,8 +40,11 @@
                                     <!-- Título y subtítulo - Derecha -->
                                     <div class="col-4" style="text-align: right;">
                                         <h4 style="margin: 0; color: #007cba;">
-                                            Recibo de aguinaldo
+                                            Liquidación de Salario
                                         </h4>
+                                        <p style="color: #333; font-size: 12px; margin-top: 3px;">
+                                            (Conforme al Art. 235 del C. del T.)
+                                        </p>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -50,7 +58,7 @@
                                         </p>
                                         
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Periodo:</strong> <t t-esc="first.payslip_run_id.name or 'N/A'"/>
+                                            <strong>Periodo:</strong> <t t-out="first.date_from.strftime('%d/%m/%Y') if first.date_from else 'N/A'"/> A <t t-out="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
                                         </p>
                                         
                                     </div>
@@ -62,7 +70,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -87,25 +95,62 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.line_ids" t-as="day">
-                                                    <t t-if="day.code == 'GROSS'">
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
-                                                            <span>Aguinaldo</span>
-                                                        </td>
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.total)"/>
-                                                        </td>
-                                                        
-                                                        
-                                                    </t>
-                                                </t>
                                                  
+                                                 <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW'])" t-as="line">
+                                                     <t t-set="day_found" t-value="False"/>
+                                                    <tr>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                            <t t-if="line.category_id.code == 'BASIC'">
+                                                                <span>Días trabajados</span>
+                                                            </t>
+                                                            <t t-else="" t-esc="line.name"/>
+                                                        </td>
+                                                        <t t-foreach="first.worked_days_line_ids" t-as="day">
+                                                            <t t-if="line.category_id.code == 'BASIC' and day.code == 'WORK100'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(day.number_of_days)"/>
+                                                                     <span> Días</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HEX50' and day.code == 'OVERTIME_EVENING'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HNOC30' and day.code == 'OVERTIME_NIGHT'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-foreach="first.input_line_ids" t-as="input">
+                                                            <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-if="not day_found">
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
+                                                        </t>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                        </td>
+                                                        
+                                                    </tr>
+                                                </t>
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -114,7 +159,42 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                            
+                                    
+                                    <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -124,12 +204,14 @@
                                 <div>
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
-                                            <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                            <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
+                                                <t t-esc="first.format_amount(line.amount)"/>
+                                            </t>
                                         </p>
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <span/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -139,10 +221,14 @@
                                     <div class="col-4" style="text-align:center">
                                         <p>NEO VENTURES S.A.</p>
                                     </div>
-
                                 </div>
                             </div>
-                            <div style="height:85mm;overflow:hidden;">
+                            <div style="height:86mm;overflow:hidden;position:relative">
+                                <t t-if="not first.paid_date">
+                                    <div style="                                         position: absolute;                                         width: 100%;                                         height: 86mm;                                         margin-left:250px;                                         -webkit-transform: rotate(-20deg);                                           -moz-transform: rotate(-20deg);                                            -ms-transform: rotate(-20deg);                                             -o-transform: rotate(-20deg);                                                transform: rotate(-20deg);                                         pointer-events: none;                                         z-index: 0;                                     ">
+                                        <span style="padding-top:100px;                                             font-size: 65px;                                             font-weight: bold;                                             color: rgba(0, 102, 204, 0.25);                                             letter-spacing: 8px;                                             opacity: 0.8;                                         ">NO PAGADO</span>
+                                    </div>
+                                    </t>
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -154,8 +240,11 @@
                                     <!-- Título y subtítulo - Derecha -->
                                     <div class="col-4" style="text-align: right;">
                                         <h4 style="margin: 0; color: #007cba;">
-                                            Recibo de aguinaldo
+                                            Liquidación de Salario
                                         </h4>
+                                        <p style="color: #333; font-size: 12px; margin-top: 3px;">
+                                            (Conforme al Art. 235 del C. del T.)
+                                        </p>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -169,7 +258,7 @@
                                         </p>
                                         
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Periodo:</strong> <t t-esc="first.payslip_run_id.name or 'N/A'"/>
+                                            <strong>Periodo:</strong> <t t-out="first.date_from.strftime('%d/%m/%Y') if first.date_from else 'N/A'"/> A <t t-out="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
                                         </p>
                                         
                                     </div>
@@ -181,7 +270,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -206,25 +295,62 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.line_ids" t-as="day">
-                                                    <t t-if="day.code == 'GROSS'">
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
-                                                            <span>Aguinaldo</span>
-                                                        </td>
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.total)"/>
-                                                        </td>
-                                                        
-                                                        
-                                                    </t>
-                                                </t>
                                                  
+                                                 <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW'])" t-as="line">
+                                                     <t t-set="day_found" t-value="False"/>
+                                                    <tr>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                            <t t-if="line.category_id.code == 'BASIC'">
+                                                                <span>Días trabajados</span>
+                                                            </t>
+                                                            <t t-else="" t-esc="line.name"/>
+                                                        </td>
+                                                        <t t-foreach="first.worked_days_line_ids" t-as="day">
+                                                            <t t-if="line.category_id.code == 'BASIC' and day.code == 'WORK100'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(day.number_of_days)"/>
+                                                                     <span> Días</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HEX50' and day.code == 'OVERTIME_EVENING'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HNOC30' and day.code == 'OVERTIME_NIGHT'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-foreach="first.input_line_ids" t-as="input">
+                                                            <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-if="not day_found">
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
+                                                        </t>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                        </td>
+                                                        
+                                                    </tr>
+                                                </t>
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -233,7 +359,42 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                            
+                                    
+                                    <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -243,12 +404,14 @@
                                 <div>
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
-                                            <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                            <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
+                                                <t t-esc="first.format_amount(line.amount)"/>
+                                            </t>
                                         </p>
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <span/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -258,15 +421,19 @@
                                     <div class="col-4" style="text-align:center">
                                         <p>NEO VENTURES S.A.</p>
                                     </div>
-
                                 </div>
                             </div>
                         </div>
                         <!-- Segundo recibo (índice i+1) -->
-                        <div style="height: 170mm; padding: 3mm 5mm;">
+                        <div style="height: 171mm; padding: 3mm 5mm; overflow:hidden;position:relative">
                             <t t-if="i + 1 &lt; len(payslips)">
                                 <t t-set="first" t-value="payslips[i + 1]"/>
-                                <div style="height:85mm;overflow:hidden;">
+                                <div style="height:86mm;overflow:hidden;position:relative">
+                                    <t t-if="not first.paid_date">
+                                    <div style="                                         position: absolute;                                         width: 100%;                                         height: 86mm;                                         margin-left:250px;                                         -webkit-transform: rotate(-20deg);                                           -moz-transform: rotate(-20deg);                                            -ms-transform: rotate(-20deg);                                             -o-transform: rotate(-20deg);                                                transform: rotate(-20deg);                                         pointer-events: none;                                         z-index: 0;                                     ">
+                                        <span style="padding-top:100px;                                             font-size: 65px;                                             font-weight: bold;                                             color: rgba(0, 102, 204, 0.25);                                             letter-spacing: 8px;                                             opacity: 0.8;                                         ">NO PAGADO</span>
+                                    </div>
+                                    </t>
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -278,8 +445,11 @@
                                     <!-- Título y subtítulo - Derecha -->
                                     <div class="col-4" style="text-align: right;">
                                         <h4 style="margin: 0; color: #007cba;">
-                                            Recibo de aguinaldo
+                                            Liquidación de Salario
                                         </h4>
+                                        <p style="color: #333; font-size: 12px; margin-top: 3px;">
+                                            (Conforme al Art. 235 del C. del T.)
+                                        </p>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -293,7 +463,7 @@
                                         </p>
                                         
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Periodo:</strong> <t t-esc="first.payslip_run_id.name or 'N/A'"/>
+                                            <strong>Periodo:</strong> <t t-out="first.date_from.strftime('%d/%m/%Y') if first.date_from else 'N/A'"/> A <t t-out="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
                                         </p>
                                         
                                     </div>
@@ -305,7 +475,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -330,25 +500,62 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.line_ids" t-as="day">
-                                                    <t t-if="day.code == 'GROSS'">
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
-                                                            <span>Aguinaldo</span>
-                                                        </td>
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.total)"/>
-                                                        </td>
-                                                        
-                                                        
-                                                    </t>
-                                                </t>
                                                  
+                                                 <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW'])" t-as="line">
+                                                     <t t-set="day_found" t-value="False"/>
+                                                    <tr>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                            <t t-if="line.category_id.code == 'BASIC'">
+                                                                <span>Días trabajados</span>
+                                                            </t>
+                                                            <t t-else="" t-esc="line.name"/>
+                                                        </td>
+                                                        <t t-foreach="first.worked_days_line_ids" t-as="day">
+                                                            <t t-if="line.category_id.code == 'BASIC' and day.code == 'WORK100'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(day.number_of_days)"/>
+                                                                     <span> Días</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HEX50' and day.code == 'OVERTIME_EVENING'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HNOC30' and day.code == 'OVERTIME_NIGHT'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-foreach="first.input_line_ids" t-as="input">
+                                                            <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-if="not day_found">
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
+                                                        </t>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                        </td>
+                                                        
+                                                    </tr>
+                                                </t>
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -357,7 +564,42 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                            
+                                    
+                                    <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -367,12 +609,14 @@
                                 <div>
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
-                                            <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                            <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
+                                                <t t-esc="first.format_amount(line.amount)"/>
+                                            </t>
                                         </p>
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <span/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -384,7 +628,12 @@
                                     </div>
                                 </div>
                             </div>
-                            <div style="height:85mm;overflow:hidden;">
+                            <div style="height:86mm;overflow:hidden;position:relative">
+                                 <t t-if="not first.paid_date">
+                                    <div style="                                         position: absolute;                                         width: 100%;                                         height: 86mm;                                         margin-left:250px;                                         -webkit-transform: rotate(-20deg);                                           -moz-transform: rotate(-20deg);                                            -ms-transform: rotate(-20deg);                                             -o-transform: rotate(-20deg);                                                transform: rotate(-20deg);                                         pointer-events: none;                                         z-index: 0;                                     ">
+                                        <span style="padding-top:100px;                                             font-size: 65px;                                             font-weight: bold;                                             color: rgba(0, 102, 204, 0.25);                                             letter-spacing: 8px;                                             opacity: 0.8;                                         ">NO PAGADO</span>
+                                    </div>
+                                    </t>
                                 <div class="row" style="margin-bottom: 3px;">
                                     <!-- Logo - Izquierda -->
                                     <div class="col-4" style="display: flex; align-items: center;">
@@ -396,8 +645,11 @@
                                     <!-- Título y subtítulo - Derecha -->
                                     <div class="col-4" style="text-align: right;">
                                         <h4 style="margin: 0; color: #007cba;">
-                                            Recibo de aguinaldo
+                                            Liquidación de Salario
                                         </h4>
+                                        <p style="color: #333; font-size: 12px; margin-top: 3px;">
+                                            (Conforme al Art. 235 del C. del T.)
+                                        </p>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -411,7 +663,7 @@
                                         </p>
                                         
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Periodo:</strong> <t t-esc="first.payslip_run_id.name or 'N/A'"/>
+                                            <strong>Periodo:</strong> <t t-out="first.date_from.strftime('%d/%m/%Y') if first.date_from else 'N/A'"/> A <t t-out="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
                                         </p>
                                         
                                     </div>
@@ -423,7 +675,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -448,25 +700,62 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.line_ids" t-as="day">
-                                                    <t t-if="day.code == 'GROSS'">
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
-                                                            <span>Aguinaldo</span>
-                                                        </td>
-                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.total)"/>
-                                                        </td>
-                                                        
-                                                        
-                                                    </t>
-                                                </t>
                                                  
+                                                 <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW'])" t-as="line">
+                                                     <t t-set="day_found" t-value="False"/>
+                                                    <tr>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                            <t t-if="line.category_id.code == 'BASIC'">
+                                                                <span>Días trabajados</span>
+                                                            </t>
+                                                            <t t-else="" t-esc="line.name"/>
+                                                        </td>
+                                                        <t t-foreach="first.worked_days_line_ids" t-as="day">
+                                                            <t t-if="line.category_id.code == 'BASIC' and day.code == 'WORK100'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(day.number_of_days)"/>
+                                                                     <span> Días</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HEX50' and day.code == 'OVERTIME_EVENING'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                            <t t-elif="line.code == 'HNOC30' and day.code == 'OVERTIME_NIGHT'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-foreach="first.input_line_ids" t-as="input">
+                                                            <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
+                                                        <t t-if="not day_found">
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
+                                                        </t>
+                                                        <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                        </td>
+                                                        
+                                                    </tr>
+                                                </t>
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -475,7 +764,42 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                            
+                                    
+                                    <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.amount)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -485,12 +809,14 @@
                                 <div>
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
-                                            <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'GROSS').mapped('amount')))"/>
+                                            <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
+                                                <t t-esc="first.format_amount(line.amount)"/>
+                                            </t>
                                         </p>
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <span/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">

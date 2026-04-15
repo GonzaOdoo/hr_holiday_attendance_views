@@ -1,7 +1,8 @@
 <odoo>
   <template id="leave_form_custom" name="Formulario de Ausencia Personalizado">
-           <t t-call="website.layout">
+             <t t-call="website.layout">
       <div id="balances-data" t-att-data-balances="balances" style="display: none;"/>
+      <div id="shift-change-data" t-att-data-shift="leave_types_shift_json" style="display:none;"/>
       <div class="container mt-4">
 
         <h2 class="mb-4">Solicitud de Tiempo Personal</h2>
@@ -62,7 +63,6 @@
                 </button>
             </div>
           <!-- Mostrar saldo SOLO si ya se eligió un tipo -->
-          
 
           <!-- Fechas -->
           <div class="mb-3 row">
@@ -76,8 +76,7 @@
                 <input type="date" name="request_date_to" class="form-control" t-att-value="leave.request_date_to"/>
             </div>
         </div>
-
-          <!-- Horas personalizadas 
+        <!--
           <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" name="request_unit_hours" id="request_unit_hours" t-att-checked="leave.request_unit_hours"/>
             <label class="form-check-label" for="request_unit_hours">Horas personalizadas</label>
@@ -94,6 +93,19 @@
               </div>
             </div>
             -->
+            
+            
+            <!-- Entrada / Salida -->
+            <div id="shifts-field" class="mb-3 row" style="display:none;">
+              <label class="col-sm-3 col-form-label">Hora de Entrada</label>
+              <div class="col-sm-3">
+                <input type="time" name="shift_start" class="form-control" t-att-value="leave.shift_start"/>
+              </div>
+              <label class="col-sm-3 col-form-label">Hora de Salida</label>
+              <div class="col-sm-3">
+                <input type="time" name="shift_end" class="form-control" t-att-value="leave.shift_end"/>
+              </div>
+            </div>
           <!-- Descripción -->
           <div class="mb-3 row">
             <label class="col-sm-3 col-form-label">Descripción</label>
@@ -103,7 +115,7 @@
           </div>
           
          <!-- Reemplazante -->
-          <div class="mb-3 row">
+          <div id="replacement-field" class="mb-3 row">
             <label class="col-sm-3 col-form-label">Reemplazante</label>
             <div class="col-sm-9">
               <select name="replacement" class="form-select">
@@ -251,6 +263,98 @@
     leaveTypeSelect.addEventListener('change', actualizarSaldo);
   });
 </script>
+
+<script type="text/javascript">
+
+document.addEventListener('DOMContentLoaded', function () {
+
+  const shiftData = JSON.parse(
+    document.getElementById('shift-change-data').dataset.shift || "{}"
+  );
+
+  const leaveTypeSelect = document.querySelector('select[name="holiday_status_id"]');
+  const shiftsField = document.getElementById('shifts-field');
+  const replacementField = document.getElementById('replacement-field');
+
+  if (!leaveTypeSelect) return;
+
+  function toggleShiftFields() {
+    const selectedId = leaveTypeSelect.value;
+
+    if (selectedId &amp;&amp; shiftData[selectedId] === true) {
+
+      // mostrar horas
+      if (shiftsField) {
+        shiftsField.style.display = 'flex';
+        shiftsField.style.flexDirection = 'row';
+        shiftsField.style.alignItems = 'center';
+      }
+
+      // ocultar reemplazante
+      if (replacementField) {
+        replacementField.style.display = 'none';
+        const select = replacementField.querySelector('select');
+        if (select) select.value = '';
+      }
+
+    } else {
+
+      // ocultar horas
+      if (shiftsField) {
+        shiftsField.style.display = 'none';
+      }
+
+      const startInput = document.querySelector('input[name="shift_start"]');
+      const endInput = document.querySelector('input[name="shift_end"]');
+      if (startInput) startInput.value = '';
+      if (endInput) endInput.value = '';
+
+      // mostrar reemplazante
+      if (replacementField) {
+        replacementField.style.display = 'flex';
+      }
+    }
+  }
+  function timeToFloat(timeStr){
+  if (!timeStr) return 0;
+
+  const parts = timeStr.split(':');
+  const hours = parseInt(parts[0]);
+  const minutes = parseInt(parts[1]);
+
+  return hours + (minutes / 60);
+}
+
+
+  toggleShiftFields();
+  leaveTypeSelect.addEventListener('change', toggleShiftFields);
+
+});
+
+</script>
+<script type="text/javascript">
+
+document.addEventListener('DOMContentLoaded', function () {
+
+  const dateFrom = document.querySelector('input[name="request_date_from"]');
+  const dateTo = document.querySelector('input[name="request_date_to"]');
+
+  if (!dateFrom || !dateTo) return;
+
+  function syncDates() {
+    if (dateFrom.value &amp;&amp; dateTo.value &amp;&amp; dateTo.value &lt; dateFrom.value) {
+      dateTo.value = dateFrom.value;
+    }
+  }
+  
+
+  dateFrom.addEventListener('change', syncDates);
+  dateTo.addEventListener('change', syncDates);
+
+});
+
+</script>
+
     </t>
   </template>
 

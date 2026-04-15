@@ -1,9 +1,16 @@
 # -*- coding: utf-8 -*-
+
+from calendar import monthrange
+from collections import defaultdict
+from dateutil.relativedelta import relativedelta
+from operator import itemgetter
+from random import randint
 from odoo import models, fields, api
 from datetime import datetime,time, timedelta
 import pytz
 from pytz import timezone, UTC
 import logging
+import math
 
 _logger = logging.getLogger(__name__)
 
@@ -55,7 +62,12 @@ class HrContract(models.Model):
         tracking=True
     )
 
-    scheduled_check_in = fields.Datetime(string='Hora programada de entrada', compute='_compute_scheduled_check_in', store=True)
+    scheduled_check_in = fields.Datetime(string='Hora programada de entrada', compute='_compute_scheduled_attendance_times', store=True)
+    scheduled_check_out = fields.Datetime(
+        string='Hora programada de salida', 
+        compute='_compute_scheduled_attendance_times', 
+        store=True
+    )
     late_minutes = fields.Float(string='Minutos de retraso', compute='_compute_late_minutes', store=True)
     is_late = fields.Boolean(string='¿Llegó tarde?', compute='_compute_is_late', store=True)
 
@@ -71,6 +83,76 @@ class HrContract(models.Model):
         store=True
     )
 
+    warning_shift_pending = fields.Boolean(
+        string="Cambio pendiente",
+        compute="_compute_shift_warnings",
+        store=False
+    )
+    night_hours = fields.Float(
+        string='Recargo nocturno',
+        compute='_compute_night_hours',
+        store=True
+    )
+
+    @api.depends('check_in', 'check_out')
+    def _compute_night_hours(self):
+    
+        def overlap(start1, end1, start2, end2):
+            start = max(start1, start2)
+            end = min(end1, end2)
+            return max((end - start).total_seconds(), 0)
+    
+        for att in self:
+            att.night_hours = 0.0
+    
+            if not att.check_in or not att.check_out:
+                continue
+    
+            tz_name = att.employee_id.tz or 'America/Asuncion'
+            tz = pytz.timezone(tz_name)
+    
+            check_in = fields.Datetime.to_datetime(att.check_in).astimezone(tz)
+            check_out = fields.Datetime.to_datetime(att.check_out).astimezone(tz)
+    
+            total_seconds = 0
+    
+            day = check_in.date()
+            last_day = check_out.date()
+    
+            while day <= last_day:
+    
+                night1_start = tz.localize(datetime.combine(day, time(0, 0)))
+                night1_end = tz.localize(datetime.combine(day, time(6, 0)))
+    
+                night2_start = tz.localize(datetime.combine(day, time(20, 0)))
+                night2_end = tz.localize(datetime.combine(day, time(23, 59, 59)))
+    
+                total_seconds += overlap(check_in, check_out, night1_start, night1_end)
+                total_seconds += overlap(check_in, check_out, night2_start, night2_end)
+    
+                day += timedelta(days=1)
+    
+            att.night_hours = total_seconds / 3600.0
+        
+    @api.depends('check_in', 'employee_id')
+    def _compute_shift_warnings(self):
+        for att in self:
+            att.warning_shift_pending = False
+    
+            if not att.employee_id or not att.check_in:
+                continue
+    
+            leave = self.env['hr.leave'].search([
+                ('employee_id', '=', att.employee_id.id),
+                ('holiday_status_id.shift_change', '=', True),
+                ('state', 'not in', ['validate', 'refuse']),
+                ('date_from', '<=', att.check_in),
+                ('date_to', '>=', att.check_in),
+            ], limit=1)
+    
+            if leave:
+                att.warning_shift_pending = True
+
     @api.depends('late_minutes', 'late_status')
     def _compute_confirmed_late_minutes(self):
         for attendance in self:
@@ -79,11 +161,13 @@ class HrContract(models.Model):
             else:
                 attendance.confirmed_late_minutes = 0.0
 
-    @api.depends('employee_id', 'check_in')
-    def _compute_scheduled_check_in(self):
+    @api.depends('employee_id', 'check_in','employee_id.shift_change_ids')
+    def _compute_scheduled_attendance_times(self):
         for attendance in self:
+            _logger.info("Computing late!")
             if not attendance.employee_id or not attendance.check_in:
                 attendance.scheduled_check_in = False
+                attendance.scheduled_check_out = False
                 continue
     
             # Obtener contrato vigente en la fecha de check_in
@@ -98,35 +182,146 @@ class HrContract(models.Model):
     
             if not contract or not contract.resource_calendar_id:
                 attendance.scheduled_check_in = False
+                attendance.scheduled_check_out = False
                 continue
     
             calendar = contract.resource_calendar_id
             employee = attendance.employee_id
-            local_tz = timezone(employee.tz or 'UTC')
+            # ✅ Usar zona horaria de Paraguay por defecto si no está definida
+            local_tz = timezone(employee.tz or 'America/Asuncion')
     
             # Convertir check_in a zona local para comparar con el calendario
             check_in_local = attendance.check_in.replace(tzinfo=UTC).astimezone(local_tz)
-            day_start = datetime.combine(check_in_local.date(), time.min).replace(tzinfo=local_tz)
-            day_end = datetime.combine(check_in_local.date(), time.max).replace(tzinfo=local_tz)
-    
-            # Obtener intervalos laborales del día
-            intervals = calendar._work_intervals_batch(
-                day_start,
-                day_end,
-                resources=employee.resource_id,
-                tz=local_tz
-            )[employee.resource_id.id]
-    
-            # Tomar el primer intervalo como hora de entrada programada
-            first_interval = next(iter(intervals), None)
-            if first_interval:
-                # ✅ Convertir a UTC antes de guardar (¡IMPORTANTE!)
-                scheduled_local = first_interval[0]  # datetime con tz local
-                scheduled_utc = scheduled_local.astimezone(UTC)  # convertir a UTC
-                attendance.scheduled_check_in = scheduled_utc.replace(tzinfo=None)  # guardar como naive UTC
+            day_start = local_tz.localize(datetime.combine(check_in_local.date(), time.min))
+            day_end = day_start + timedelta(days=2)
+            #day_end = local_tz.localize(datetime.combine(check_in_local.date(), time.max))
+
+            _logger.info("Days!!")
+            _logger.info(day_start)
+            _logger.info(day_end)
+            candidates = []
+            # Obtener intervalos laborales del día (excluye descansos automáticamente)
+            intervals = employee._employee_attendance_intervals(
+                day_start.astimezone(UTC),
+                day_end.astimezone(UTC),
+                lunch=False
+            )
+            normal_intervals = contract.resource_calendar_id._attendance_intervals_batch(
+                day_start.astimezone(UTC),
+                day_end.astimezone(UTC),
+                employee.resource_id
+            ).get(employee.resource_id.id, [])
+            check_date = attendance.check_in.date()
+
+            normal_intervals = sorted(normal_intervals, key=lambda x: x[0])
+
+            for interval in normal_intervals:
+                start_local = interval[0].astimezone(local_tz)
+                # eliminar intervalos antes de las 04:00 del mismo día
+                if (
+                    start_local.date() == check_in_local.date()
+                    and start_local.hour < 4
+                ):
+                    continue
+            
+                candidates.append(interval)
+
+            shift_change = self.env['hr.employee.shift.change'].search([
+                ('employee_id', '=', employee.id),
+                ('state', '=', 'approved'),
+            ], order='date_start desc', limit=10)
+            _logger.info(shift_change)
+            shift_change = shift_change.filtered(
+                lambda s: s.date_start.date() <= check_date <= s.date_end.date()
+            )[:1]
+            _logger.info(shift_change)
+            extra_intervals = []
+            
+            if shift_change:
+                calendar = shift_change.calendar_id
+                extra_intervals = calendar._attendance_intervals_batch(
+                    day_start.astimezone(UTC),
+                    day_end.astimezone(UTC),
+                    employee.resource_id
+                ).get(employee.resource_id.id, [])
+                _logger.info("Extra intervals!!!!")
+                _logger.info(extra_intervals)
+                for interval in extra_intervals:
+                    start_local = interval[0].astimezone(local_tz)
+                    # eliminar intervalos antes de las 04:00 del mismo día
+                    if (
+                        start_local.date() == check_in_local.date()
+                        and start_local.hour < 4
+                    ):
+                        continue
+                
+                    candidates.append(interval)
+                
+            
+            intervals_list = sorted(list(intervals), key=lambda x: x[0])
+            
+            # ✅ Obtener primer intervalo para entrada programada
+            if intervals_list:
+                # Buscar el intervalo más cercano al check_in
+                _logger.info(intervals_list)
+                check_in_local = attendance.check_in.replace(tzinfo=UTC).astimezone(local_tz)
+                
+                closest_interval = None
+                smallest_diff = None
+                _logger.info("Candidates!!!")
+                _logger.info(candidates)
+                for interval in candidates:
+                    start = interval[0]
+                    end = interval[1]
+                
+                    if start <= check_in_local <= end:
+                        closest_interval = interval
+                        break
+                
+                # fallback: usar el primer intervalo del día
+                if not closest_interval and candidates:
+                    closest_interval = candidates[0]
+                
+                if closest_interval:
+                    scheduled_in_local = closest_interval[0]
+                    scheduled_out_local = closest_interval[1]
+                    intervals_sorted = sorted(candidates, key=lambda x: x[0])
+                    _logger.info("Calculo de salida")
+                    _logger.info(intervals_sorted)
+                    shift_end = closest_interval[1]
+                    prev_end = closest_interval[1]
+                    _logger.info(shift_end)
+                    
+                    for interval in intervals_sorted:
+                        start = interval[0]
+                        end = interval[1]
+                        
+                        if start <= closest_interval[0]:
+                            continue
+                    
+                        gap_hours = (start - prev_end).total_seconds() / 3600
+                    
+                        # tolerancia pequeña (descansos o división de calendario)
+                        if gap_hours <= 1.5:
+                            shift_end = end
+                            prev_end = end
+                            continue
+                    
+                        # gap grande → terminó el turno
+                        break
+                    _logger.info(shift_end) 
+                
+                    attendance.scheduled_check_in = scheduled_in_local.astimezone(UTC).replace(tzinfo=None)
+                    attendance.scheduled_check_out = shift_end.astimezone(UTC).replace(tzinfo=None)
+                else:
+                    attendance.scheduled_check_in = False
+                    attendance.scheduled_check_out = False
             else:
                 attendance.scheduled_check_in = False
+    
+            # ✅ Obtener último intervalo para salida programada
 
+                
     @api.depends('scheduled_check_in', 'check_in')
     def _compute_late_minutes(self):
         for attendance in self:
@@ -299,3 +494,145 @@ class HrContract(models.Model):
             attendance.write({
                 'late_status': 'refused',
             })
+
+
+    @api.depends('worked_hours','employee_id.shift_change_ids')
+    def _compute_overtime_hours(self):
+        if self.env.context.get('skip_overtime_compute'):
+            return
+        atts = self.filtered(lambda r: r._name == 'hr.attendance')
+        fallback_atts = self.env['hr.attendance']
+
+        for att in atts:
+            att.overtime_hours = 0.0
+    
+            if not att.check_in or not att.check_out or not att.employee_id:
+                fallback_atts |= att
+                continue
+    
+            employee = att.employee_id
+            calendar = employee.resource_calendar_id
+    
+            if not calendar:
+                fallback_atts |= att
+                continue
+    
+            tz = pytz.timezone(calendar.tz or 'UTC')
+    
+            check_in = pytz.utc.localize(att.check_in).astimezone(tz)
+            check_out = pytz.utc.localize(att.check_out).astimezone(tz)
+    
+            range_start = check_in - timedelta(hours=8)
+            range_end = check_out + timedelta(hours=8)
+    
+            intervals = calendar._attendance_intervals_batch(
+                range_start,
+                range_end,
+                employee.resource_id
+            ).get(employee.resource_id.id, [])
+    
+            intervals = list(intervals)
+    
+            if not intervals:
+                fallback_atts |= att
+                continue
+    
+            sched_in, sched_out = self._get_full_shift_interval(att, intervals)
+    
+            if not sched_in or not sched_out:
+                fallback_atts |= att
+                continue
+    
+            # 🔴 NUEVA REGLA: validar cercanía al turno
+            diff_hours = abs((check_in - sched_in).total_seconds() / 3600.0)
+    
+            if diff_hours > 3:
+                fallback_atts |= att
+                continue
+            # =========================
+            # ✅ TU LÓGICA CUSTOM
+            # =========================
+            grace_hours = 0.5
+            
+            extra_before = 0.0
+            extra_after = 0.0
+            
+            # Entrada anticipada
+            entry_diff = (sched_in - check_in).total_seconds() / 3600.0
+            if entry_diff > grace_hours:
+                extra_before = entry_diff
+            
+            # Salida tardía
+            exit_diff = (check_out - sched_out).total_seconds() / 3600.0
+            if exit_diff > grace_hours:
+                extra_after = exit_diff
+            
+            att.overtime_hours = extra_before + extra_after
+        # =========================
+        # 🔁 FALLBACK A ODOO
+        # =========================
+        if fallback_atts:
+            super(HrContract, fallback_atts)._compute_overtime_hours()
+        
+            for att in fallback_atts:
+                if att.overtime_hours < 0:
+                    att.overtime_hours = 0.0
+
+    def _normalize_interval(self, interval):
+        """
+        Devuelve (start, end) independientemente del tipo
+        """
+        if hasattr(interval, 'start'):
+            return interval.start, interval.stop
+        else:
+            return interval[0], interval[1]
+            
+    def _get_full_shift_interval(self, att, intervals):
+        if not intervals:
+            return None, None
+    
+        intervals = list(intervals)
+    
+        # 🔹 Normalizar y ordenar
+        normalized = []
+        for i in intervals:
+            start, end = self._normalize_interval(i)
+            normalized.append((start, end))
+    
+        normalized = sorted(normalized, key=lambda x: x[0])
+    
+        # 🔹 TZ consistente
+        tz = normalized[0][0].tzinfo
+        check_in = pytz.utc.localize(att.check_in).astimezone(tz)
+    
+        # 🔹 Encontrar intervalo actual
+        current = None
+        for start, end in normalized:
+            if start <= check_in <= end:
+                current = (start, end)
+                break
+    
+        if not current:
+            current = normalized[0]
+    
+        shift_start, shift_end = current
+    
+        # 🔹 Unir consecutivos
+        tolerance = timedelta(minutes=65)
+    
+        for start, end in normalized:
+            if start >= shift_end and (start - shift_end) <= tolerance:
+                shift_end = end
+    
+        return shift_start, shift_end
+
+    @api.depends('check_in', 'check_out','employee_id.shift_change_ids')
+    def _compute_worked_hours(self):
+        """ Computes the worked hours of the attendance record.
+            The worked hours of resource with flexible calendar is computed as the difference
+            between check_in and check_out, without taking into account the lunch_interval"""
+        for attendance in self:
+            if attendance.check_out and attendance.check_in and attendance.employee_id:
+                attendance.worked_hours = attendance._get_worked_hours_in_range(attendance.check_in, attendance.check_out)
+            else:
+                attendance.worked_hours = False

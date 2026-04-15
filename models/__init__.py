@@ -15,3 +15,5 @@ from . import hr_leave_allocation
 from . import hr_leave_allocation_liquidation_wizard
 from . import libros_laborales
 from . import hr_payroll_structure
+from . import hr_employee
+from . import hr_shift_change_wizard

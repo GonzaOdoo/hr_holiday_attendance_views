@@ -1,0 +1,31 @@
+<odoo>
+    <record id="view_hr_leave_shift_change_wizard_form" model="ir.ui.view">
+        <field name="name">hr.leave.shift.change.wizard.form</field>
+        <field name="model">hr.leave.shift.change.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Aprobar cambio de horario">
+                <group>
+                    <field name="employee_id" readonly="1"/>
+                    <field name="date_from" readonly="1"/>
+                    <field name="date_to" readonly="1"/>
+                </group>
+    
+                <group string="Horario aprobado">
+                    <field name="calendar_days"/>
+                    <field name="shift_start"  widget="float_time" readonly="1"/>
+                    <field name="shift_end"  widget="float_time" readonly="1"/>
+                </group>
+    
+                <footer>
+                    <button name="action_confirm"
+                            type="object"
+                            string="Aprobar"
+                            class="btn-primary"/>
+                    <button string="Cancelar"
+                            special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
