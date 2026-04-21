@@ -369,7 +369,7 @@ class HrLeaveAllocationReport(models.Model):
                 'name': f"Asignación automática {period_start.year} - {emp.name}",
                 'employee_id': emp.id,
                 'holiday_status_id': leave_type.id,
-                'number_of_days': r.computed_days,
+                'number_of_days': r.total_available,
                 'allocation_type': 'regular',
                 'date_from': period_start,
                 'date_to': period_end,

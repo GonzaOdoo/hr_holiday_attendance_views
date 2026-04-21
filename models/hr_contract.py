@@ -10,6 +10,14 @@ _logger = logging.getLogger(__name__)
 
 class HrContract(models.Model):
     _inherit = 'hr.contract'
+    hourly_rate = fields.Monetary(string="Por hora",compute='_compute_hourly_rate')
+
+    def _compute_hourly_rate(self):
+        for record in self:
+            if record.schedule_pay == 'monthly':
+                record.hourly_rate = record.wage / 30 / 8
+            else:
+                 record.hourly_rate = 0
 
     def _preprocess_work_hours_data(self, work_data, date_from, date_to):
         """

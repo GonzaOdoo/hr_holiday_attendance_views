@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api, Command
+from odoo import models, fields, api, Command, _
 from datetime import date,datetime,timedelta
 from dateutil.relativedelta import relativedelta
 from odoo.exceptions import UserError
@@ -275,36 +275,39 @@ class HrContract(models.Model):
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
 
     def _get_unjustified_absence_days(self, hours_per_day):
-        """Devuelve el número de días laborables SIN entrada de trabajo DENTRO de la vigencia del contrato."""
+        """Devuelve el número de días laborables SIN entrada de trabajo dentro de la vigencia del contrato."""
         employee = self.employee_id
         contract = self.contract_id
-        calendar = contract.resource_calendar_id or employee.resource_calendar_id or self.env.company.resource_calendar_id
     
+        calendar = contract.resource_calendar_id or employee.resource_calendar_id or self.env.company.resource_calendar_id
         if not (calendar and employee.resource_id):
             return 0
-        _logger.info("Calculo de ausencia")
-        _logger.info(calendar)
-        # → Usar rango efectivo del contrato en lugar del período completo de la nómina
+    
         effective_start, effective_end = self._get_contract_effective_dates()
-        _logger.info(effective_start)
-        _logger.info(effective_end)
         if effective_start > effective_end:
-            return 0  # No hay días dentro del contrato
+            return 0
     
         tz_name = calendar.tz or 'UTC'
         tz = pytz.timezone(tz_name)
     
         dt_from = fields.Datetime.to_datetime(effective_start)
         dt_to = fields.Datetime.to_datetime(effective_end)
+    
         local_from = tz.localize(dt_from.replace(hour=0, minute=0, second=0))
         local_to = tz.localize(dt_to.replace(hour=23, minute=59, second=59))
     
-        # Días laborables según calendario DENTRO del rango efectivo
-        intervals = calendar._work_intervals_batch(local_from, local_to, resources=employee.resource_id, tz=tz)
-        att_intervals = list(intervals.get(employee.resource_id.id, []))
-        _logger.info(intervals)
-        #_logger.info(att_intervals)
+        # =========================
+        # 1️⃣ DÍAS LABORABLES
+        # =========================
+        intervals = calendar._work_intervals_batch(
+            local_from,
+            local_to,
+            resources=employee.resource_id,
+            tz=tz
+        )
+    
         workable_dates = set()
+    
         for start, stop, _ in intervals.get(employee.resource_id.id, []):
             d = start.date()
             while d <= stop.date():
@@ -313,28 +316,62 @@ class HrContract(models.Model):
     
         if not workable_dates:
             return 0
-        _logger.info(workable_dates)
-        # Días con alguna entrada de trabajo (cualquier tipo) en el MISMO rango
+    
+        # =========================
+        # 2️⃣ FERIADOS
+        # =========================
+        holidays = self.env['resource.calendar.leaves'].search([
+            ('resource_id', '=', False),
+            ('date_from', '<=', local_to.astimezone(pytz.UTC).replace(tzinfo=None)),
+            ('date_to', '>=', local_from.astimezone(pytz.UTC).replace(tzinfo=None)),
+        ])
+    
+        holiday_dates = set()
+    
+        for leave in holidays:
+            start = pytz.utc.localize(leave.date_from).astimezone(tz).date()
+            stop = pytz.utc.localize(leave.date_to).astimezone(tz).date()
+    
+            d = start
+            while d <= stop:
+                holiday_dates.add(d)
+                d += timedelta(days=1)
+    
+        workable_dates -= holiday_dates
+    
+        if not workable_dates:
+            return 0
+    
+        # =========================
+        # 3️⃣ DÍAS CUBIERTOS
+        # =========================
         work_entries = self.env['hr.work.entry'].search([
             ('employee_id', '=', employee.id),
             ('active', '=', True),
-            ('date_stop', '<=', effective_end),
-            ('date_start', '>=', effective_start),
+            ('date_stop', '>=', fields.Datetime.to_datetime(effective_start)),
+            ('date_start', '<=', fields.Datetime.to_datetime(effective_end) + timedelta(days=1)),
         ])
-        _logger.info(work_entries)
+    
         covered_dates = set()
+    
         for we in work_entries:
             start_utc = we.date_start
             stop_utc = we.date_stop
+    
             start_local = pytz.utc.localize(start_utc).astimezone(tz).date()
             stop_local = pytz.utc.localize(stop_utc).astimezone(tz).date()
+    
             d = start_local
             while d <= stop_local:
                 if effective_start <= fields.Date.from_string(str(d)) <= effective_end:
                     covered_dates.add(d)
                 d += timedelta(days=1)
-        _logger.info(covered_dates)
+    
+        # =========================
+        # 4️⃣ AUSENCIAS
+        # =========================
         unjustified = workable_dates - covered_dates
+    
         return len(unjustified)
 
 
@@ -1064,3 +1101,15 @@ class HrContract(models.Model):
             domain += [('date_stop', '<=', stop_date)]
         work_entries = self.env['hr.work.entry'].search(domain)
         return work_entries
+
+
+    def action_payslip_paid(self):
+        if any(slip.state not in ['done', 'paid'] for slip in self):
+            raise UserError(_('No se puede marcar el recibo como pagado si no está confirmado.'))
+
+        paid_date = self.env.context.get('force_paid_date') or fields.Date.today()
+
+        self.filtered(lambda p: p.state != 'paid').write({
+            'state': 'paid',
+            'paid_date': paid_date,
+        })

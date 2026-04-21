@@ -17,6 +17,10 @@ class HrContract(models.Model):
         readonly=True,
     )
 
+    payment_date = fields.Date(string='Fecha de pago')
+
+    
+
     @api.depends('date_end')  # Solo depende de date_to, porque es nuestra referencia
     def _compute_date_events(self):
         for payslip in self:
@@ -33,3 +37,15 @@ class HrContract(models.Model):
             else:
                 payslip.date_from_events = False
                 payslip.date_to_events = False
+
+
+    def action_paid(self):
+        for run in self:
+            ctx = dict(self.env.context)
+            if run.payment_date:
+                ctx['force_paid_date'] = run.payment_date
+
+            run.mapped('slip_ids').with_context(ctx).action_payslip_paid()
+
+        self.write({'state': 'paid'})
+        
