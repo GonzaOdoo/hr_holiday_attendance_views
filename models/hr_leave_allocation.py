@@ -60,18 +60,16 @@ class HrLeaveAllocation(models.Model):
                 continue
     
             # Buscar liquidaciones aprobadas en el período de la asignación
-            liquidated_leaves = self.env['hr.leave'].search([
-                ('employee_id', '=', allocation.employee_id.id),
-                ('holiday_status_id', '=', allocation.liquidation_leave_type_id.id),
-                ('state', 'in', ['confirm', 'validate']),
-                ('request_date_to', '>=', allocation.date_from),
-                ('request_date_from', '<=', allocation.date_to),
+            liquidations = self.env['hr.leave.liquidation'].search([
+                ('allocation_id', '=', allocation.id),
             ])
     
-            total_liquidated = sum(liquidated_leaves.mapped('number_of_days'))
+            total_liquidated = sum(liquidations.mapped('days'))
             allocation.available_to_liquidate = max(
                 0.0,
-                allocation.max_leaves - allocation.leaves_taken - total_liquidated
+                allocation.max_leaves
+                - allocation.leaves_taken
+                - total_liquidated
             )
 
     @api.depends('liquidation_date', 'available_to_liquidate')

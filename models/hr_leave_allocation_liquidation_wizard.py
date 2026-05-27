@@ -1,65 +1,77 @@
-# models/leave_liquidation_wizard.py
-
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from dateutil.relativedelta import relativedelta
-import logging
 
-_logger = logging.getLogger(__name__)
-class LeaveLiquidationWizard(models.TransientModel):
-    _name = 'leave.liquidation.wizard'
-    _description = 'Wizard to Liquidate Unused Leave Days'
+class HrLeaveLiquidationWizard(models.TransientModel):
+    _name = 'hr.leave.liquidation.wizard'
+    _description = 'Leave Liquidation Wizard'
 
-    allocation_id = fields.Many2one('hr.leave.allocation', required=True, ondelete='cascade')
-    employee_id = fields.Many2one('hr.employee',string='Empleado', related='allocation_id.employee_id', readonly=True)
-    available_to_liquidate = fields.Float(related='allocation_id.available_to_liquidate',string='Disponibles a liquidar', readonly=True)
-    month_year = fields.Date(
-        string="Mes en nómina",
+    report_id = fields.Many2one(
+        'hr.leave.allocation.report',
         required=True,
-        help="Select the payroll month (e.g., 01/10/2025 for October 2025). The leave will be placed on the last working day of this month."
-    )
-    leave_type_id = fields.Many2one(
-        'hr.leave.type',
-        string="Tipo de tiempo",
-        required=True,
-        domain="[('has_valid_allocation', '=', False), ('requires_allocation', '=', 'no')]"
     )
 
-    @api.onchange('month_year')
-    def _onchange_month_year(self):
-        if self.month_year:
-            # Asegurar que la fecha sea el primer día del mes (para cálculos)
-            self.month_year = self.month_year.replace(day=1)
+    liquidation_date = fields.Date(
+        string='Fecha de liquidación',
+        required=True,
+        default=fields.Date.today,
+    )
 
-    def action_liquidate(self):
+    def action_confirm(self):
         self.ensure_one()
-        if self.available_to_liquidate <= 0:
-            raise UserError(_("No days available to liquidate."))
-    
-        # Asegurar que el mes_year sea el primer día del mes (ya lo haces en onchange)
-        start_of_month = self.month_year.replace(day=1)
-    
-        # Calcular la fecha final: N días corridos a partir del primer día
-        num_days = int(self.available_to_liquidate)
-        date_from = start_of_month
-        date_to = start_of_month + relativedelta(days=num_days - 1)  # -1 porque el primer día cuenta como día 1
-    
-        # Crear el leave
-        leave = self.env['hr.leave'].create({
-            'employee_id': self.employee_id.id,
-            'holiday_status_id': self.leave_type_id.id,
-            'request_date_from': date_from,
-            'request_date_to': date_to,
-            'number_of_days': self.available_to_liquidate,  # aunque Odoo lo recalcula, lo forzamos por claridad
-            'name': _("Liquidación de días no usados"),
-        })
-        
-        # Validar para que se consuman los días
-        leave.action_validate()
-    
-        self.allocation_id.message_post(
-            body=_("Liquidation leave created: %(days)s days from %(date_from)s to %(date_to)s.",
-                   days=self.available_to_liquidate, date_from=date_from, date_to=date_to)
+
+        report = self.report_id
+        emp = report.employee_id
+
+        start = (
+            emp.x_studio_inicio
+            or emp.first_contract_date
+            or emp.create_date.date()
         )
-    
-        return {'type': 'ir.actions.act_window_close'}
+
+        today = fields.Date.today()
+        years_worked = relativedelta(today, start).years
+
+        period_start = start + relativedelta(years=years_worked)
+        period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
+
+        allocation = self.env['hr.leave.allocation'].search([
+            ('employee_id', '=', emp.id),
+            ('state', 'in', ['confirm', 'validate', 'validate1']),
+            ('date_from', '=', period_start),
+            ('date_to', '=', period_end),
+        ], limit=1)
+
+        if not allocation:
+            raise UserError(_("No se encontró la asignación."))
+
+        days = allocation.available_to_liquidate
+
+        if days <= 0:
+            raise UserError(_("No hay días para liquidar."))
+
+        date_start = self.liquidation_date
+        date_end = date_start + relativedelta(days=int(days) - 1)
+
+        self.env['hr.leave.liquidation'].create({
+            'employee_id': emp.id,
+            'allocation_id': allocation.id,
+            'date_start': date_start,
+            'date_end': date_end,
+            'days': days,
+        })
+
+        allocation._compute_available_to_liquidate()
+        allocation._compute_requires_liquidation()
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Liquidación creada'),
+                'message': _(
+                    'Se registró la liquidación de %s días.'
+                ) % days,
+                'type': 'success',
+            }
+        }

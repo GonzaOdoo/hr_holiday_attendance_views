@@ -78,6 +78,7 @@ class LeavePortal(http.Controller):
             #'shift_start': float(kw.get('shift_start') or 0.0),
             #'shift_end': float(kw.get('shift_end') or 0.0),
         }
+        _logger.info(leave_vals)
         leave = request.env['hr.leave'].sudo().new(leave_vals)
         return request.render('hr_holiday_attendance_views.leave_form_custom', {
             'leave': leave,
@@ -108,52 +109,26 @@ class LeavePortal(http.Controller):
         try:
             # Validar y convertir valores
             with request.env.cr.savepoint():
-                shift_start = self._time_to_float(post.get('shift_start'))
-                shift_end = self._time_to_float(post.get('shift_end'))
-                request_unit_hours = bool(shift_start and shift_end)
-                request_hour_from = shift_start or 0.0
-                request_hour_to = shift_end or 0.0
                 date_from = fields.Date.from_string(post['request_date_from'])
                 date_to = fields.Date.from_string(post['request_date_to'])
-                if shift_end <= shift_start and date_from == date_to:
-                    # Cruce de medianoche: el final es al día siguiente
-                    date_to = date_to + timedelta(days=1)
-                date = fields.Date.from_string(post['request_date_from'])
-                start = self._time_to_float(post.get('shift_start'))
-                end = self._time_to_float(post.get('shift_end'))
                 
-                date_from = datetime.combine(date, time()) + timedelta(hours=start)
-                
-                if end <= start:
-                    date_to = datetime.combine(date + timedelta(days=1), time()) + timedelta(hours=end)
-                else:
-                    date_to = datetime.combine(date, time()) + timedelta(hours=end)
-
+                shift_start = self._time_to_float(post.get('shift_start'))
+                shift_end = self._time_to_float(post.get('shift_end'))
                 
                 vals = {
-                    'employee_id': employee.id,  # ¡El empleado siempre es el del usuario!
+                    'employee_id': employee.id,
                     'replacement': int(post.get('replacement', 0)) if post.get('replacement', 0) else False,
                     'holiday_status_id': int(post['holiday_status_id']),
-                    'request_date_from':date_from,
-                    'request_date_to': date_to,
                     'name': post.get('name', ''),
+                    'request_date_from': date_from,
+                    'request_date_to': date_to,
                     'reason_text': post.get('name', ''),
                     'tipo_enfermedad': post.get('tipo_enfermedad', ''),
                     'shift_start': shift_start,
                     'shift_end': shift_end,
                     
                 }
-                _logger.info(vals)
-                if shift_start and shift_end:
-                    suggested_calendar = self._find_best_matching_calendar(
-                        employee,
-                        date_from,
-                        date_to,
-                        shift_start,
-                        shift_end
-                    )
-                    if suggested_calendar:
-                        vals['calendar_days'] = suggested_calendar.id
+                
                 # Crear la solicitud
                 _logger.info(f"Creando leave con vals: {vals}")
                 _logger.info(f"date_from calculado: {vals.get('date_from')}")

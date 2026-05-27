@@ -127,7 +127,7 @@ class HrLeave(models.Model):
             work_hours = calendar.get_work_hours_count(
                 start_dt=start_dt,
                 end_dt=end_dt,
-                compute_leaves=False  # ya estás en un leave, no contar otros leaves
+                compute_leaves=True 
             )
     
             # Convertir horas hábiles a días hábiles (asumiendo jornada diaria estándar)
