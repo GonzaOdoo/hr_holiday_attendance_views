@@ -207,10 +207,25 @@ class HrPayrollReport(models.Model):
     def action_generate_report(self):
         self.ensure_one()
         slips = self.slips
-        if self.report_type == 'bonus':
+        if self.report_type == 'vacation':
+    
+            vacation_action = self.env.ref(
+                'hr_holiday_attendance_views.action_report_payslip_two_per_page_holiday'
+            ).report_action(slips)
+    
+            notification_action = self.env.ref(
+                'hr_holiday_attendance_views.action_report_holiday_notification'
+            ).report_action(slips)
+    
+            return {
+                'type': 'ir.actions.act_multi',
+                'actions': [
+                    vacation_action,
+                    notification_action,
+                ]
+            }
+        elif self.report_type == 'bonus':
             report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page_bonus'
-        elif self.report_type == 'vacation':
-            report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page_holiday'
         else:
             report_ref = 'hr_holiday_attendance_views.action_report_payslip_two_per_page'
         return self.env.ref(report_ref).report_action(slips)

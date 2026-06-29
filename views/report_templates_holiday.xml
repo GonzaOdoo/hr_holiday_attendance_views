@@ -2,9 +2,18 @@
 <odoo>
     <!-- Plantilla principal del informe -->
     <template id="report_payslip_two_per_page_holiday">
-        <t t-call="web.html_container">
+          <t t-call="web.html_container">
             <t t-call="web.basic_layout">
-
+                <style>
+                    .page {
+                        page-break-after: always;
+                        break-after: page;
+                    }
+                    .page:last-child {
+                        page-break-after: auto;
+                        break-after: auto;
+                    }
+                </style>
                 <!-- Agrupamos manualmente los docs en pares -->
                 <t t-set="payslips" t-value="docs"/>
 
@@ -78,14 +87,14 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
                                                 <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.is_leave">
+                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
@@ -99,7 +108,7 @@
                                                         
                                                     </t>
                                                 </t>
-                                                 
+                                                
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -109,6 +118,42 @@
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
                                                         <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                      <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -201,14 +246,14 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
                                                 <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.is_leave">
+                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
@@ -222,7 +267,7 @@
                                                         
                                                     </t>
                                                 </t>
-                                                 
+                                                
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -232,6 +277,42 @@
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
                                                         <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                      <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -329,14 +410,14 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
                                                 <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.is_leave">
+                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
@@ -350,7 +431,7 @@
                                                         
                                                     </t>
                                                 </t>
-                                                 
+                                                
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -360,6 +441,42 @@
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
                                                         <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                      <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -452,14 +569,14 @@
                                 <div class="row" style="margin-top: 5px; font-size: 11px;">
                                     <!-- Tabla 1: Conceptos Generales -->
                                     
-                                    <div class="col-12">
+                                    <div class="col-8">
                                         <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">HABERES</div>
                                         <table style="width: 100%; border-collapse: collapse;padding-right:3px;">
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
                                                 <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.is_leave">
+                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
@@ -473,7 +590,7 @@
                                                         
                                                     </t>
                                                 </t>
-                                                 
+                                                
                                             </tbody>
                                             <tfoot>
                                                 <!-- Total Salario -->
@@ -483,6 +600,42 @@
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
                                                         <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                      <div class="col-4">
+                                        <div style="background-color: #f0f0f0;width:100%;height:16px;border:1px solid #ddd;text-align:center;">DESCUENTOS</div>
+                                        <table style="width: 100%; border-collapse: collapse;">
+                            
+                                            <tbody>
+                                                <!-- Aquí irán las líneas de la primera tabla -->
+                                                <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
+                                                    <t t-if="line.amount != 0">
+                                                        <tr>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
+                                                               
+                                                                <t t-esc="line.name"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="line.quantity"/>
+                                                            </td>
+                                                            <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                <t t-esc="first.format_amount(-1 * line.total)"/>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </t>
+                                            </tbody>
+                                            <tfoot>
+                                                <!-- Total Descuentos -->
+                                                <tr>
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                        Subotal
+                                                    </td>
+                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>

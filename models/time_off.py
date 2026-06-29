@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from dateutil.relativedelta import relativedelta
-from datetime import datetime
+from datetime import datetime,timedelta
 from odoo.exceptions import UserError,ValidationError
 import pytz
 import logging
@@ -99,43 +99,79 @@ class HrLeave(models.Model):
 
 
     def _get_durations(self, check_leave_type=True, resource_calendar=None):
-        """
-        Calcula la duración de la ausencia en días y horas hábiles,
-        usando el calendario laboral del empleado.
-        """
+    
         result = {}
+    
         for leave in self:
             if not leave.date_from or not leave.date_to:
                 result[leave.id] = (0, 0)
                 continue
     
-            # Obtener el calendario: preferir el del empleado, luego el parámetro, luego ninguno
             calendar = leave.employee_id.resource_calendar_id or resource_calendar
+    
             if not calendar:
-                # Si no hay calendario, fallback a cálculo simple (pero con precisión horaria)
-                duration_days = (leave.date_to - leave.date_from).days
-                duration_hours = (leave.date_to - leave.date_from).total_seconds() / 3600
-                result[leave.id] = (round(duration_days + (duration_hours % 24) / 24, 2), round(duration_hours, 2))
+                duration_hours = (
+                    leave.date_to - leave.date_from
+                ).total_seconds() / 3600
+    
+                duration_days = duration_hours / 8.0
+    
+                result[leave.id] = (
+                    round(duration_days, 2),
+                    round(duration_hours, 2),
+                )
                 continue
     
-            # Asegurar zonas horarias coherentes (Odoo usa UTC en campos datetime)
             tz = pytz.timezone(leave.employee_id.tz or 'UTC')
+    
             start_dt = leave.date_from.astimezone(tz)
             end_dt = leave.date_to.astimezone(tz)
     
-            # Calcular horas hábiles según el calendario
+            # Horas laborales reales
             work_hours = calendar.get_work_hours_count(
                 start_dt=start_dt,
                 end_dt=end_dt,
-                compute_leaves=True 
+                compute_leaves=True,
             )
     
-            # Convertir horas hábiles a días hábiles (asumiendo jornada diaria estándar)
-            # Ej: si el calendario tiene 8h/día, 8h = 1 día útil
-            hours_per_day = calendar.hours_per_day or 8.0
-            work_days = work_hours / hours_per_day if hours_per_day else 0
+            # Licencias por horas
+            if leave.leave_type_request_unit == 'hour':
+                work_days = 0
     
-            result[leave.id] = (round(work_days, 2), round(work_hours, 2))
+            else:
+                # Contar días laborales reales
+                work_days = 0
+    
+                current_day = start_dt.date()
+                end_day = end_dt.date()
+    
+                while current_day <= end_day:
+    
+                    day_start = tz.localize(datetime.combine(
+                        current_day,
+                        datetime.min.time()
+                    ))
+    
+                    day_end = tz.localize(datetime.combine(
+                        current_day,
+                        datetime.max.time()
+                    ))
+    
+                    daily_hours = calendar.get_work_hours_count(
+                        start_dt=day_start,
+                        end_dt=day_end,
+                        compute_leaves=True,
+                    )
+    
+                    if daily_hours > 0:
+                        work_days += 1
+    
+                    current_day += timedelta(days=1)
+    
+            result[leave.id] = (
+                round(work_days, 2),
+                round(work_hours, 2),
+            )
     
         return result
 

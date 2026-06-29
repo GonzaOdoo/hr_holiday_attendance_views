@@ -4,35 +4,79 @@
 
     <record id="view_hr_leave_liquidation_wizard_form"
             model="ir.ui.view">
+
         <field name="name">hr.leave.liquidation.wizard.form</field>
         <field name="model">hr.leave.liquidation.wizard</field>
         <field name="arch" type="xml">
             <form string="Liquidar vacaciones">
+                <sheet>
+                    <group>
 
-                <group>
-                    <field name="report_id" invisible="1"/>
+                        <!-- Individual -->
+                        <field name="report_id" invisible="1"/>
 
-                    <field name="liquidation_date"/>
+                        <field name="employee_id"
+                               readonly="1"
+                               invisible="is_massive"/>
 
-                </group>
+                        <field name="available_to_liquidate"
+                               readonly="1"
+                               invisible="is_massive"/>
+                        
+                        <!-- Masivo -->
 
+                        
+
+                    </group>
+                    <group string="Nómina">
+                        <field name="liquidation_date"/>
+                        <field name="batch_id" required = "is_massive"/>
+                    
+                    </group>
+
+                    <notebook invisible="not is_massive">
+
+                        <page string="Asignaciones">
+
+                            <field name="report_ids"
+                                   readonly="1">
+
+                                <list>
+                                    <field name="employee_id"/>
+                                    <field name="available_to_liquidate"/>
+                                    <field name="requires_liquidation"/>
+                                </list>
+
+                            </field>
+
+                        </page>
+
+                    </notebook>
+                    
+                </sheet>
                 <footer>
 
                     <button
-                        name="action_confirm"
-                        string="Liquidar"
+                        name="action_create_payslip"
+                        string="Crear recibo/s de nómina"
                         type="object"
                         class="btn-primary"/>
+                    <button
+                        name="action_confirm"
+                        string="Confirmar liquidacion/es"
+                        type="object"
+                        class="btn-secondary"/>
 
                     <button
                         string="Cancelar"
-                        special="cancel"
-                        class="btn-secondary"/>
+                        special="cancel"/>
 
                 </footer>
 
             </form>
+
         </field>
+
     </record>
 
 </odoo>

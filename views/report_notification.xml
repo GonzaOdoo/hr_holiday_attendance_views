@@ -1,0 +1,168 @@
+<odoo>
+
+    <template id="report_holiday_notification">
+
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+
+                <t t-call="web.basic_layout">
+
+                    <div class="page"
+                         style="padding: 60px 80px; font-size: 14px;">
+
+                        <!-- Logo -->
+                        <div style="text-align:center; margin-bottom: 30px;">
+
+                            <img t-if="o.company_id.logo"
+                                 t-att-src="image_data_uri(o.company_id.logo)"
+                                 style="max-height: 120px; max-width: 300px;"/>
+
+                        </div>
+
+                        <!-- Título -->
+                        <h2 style="text-align:center; margin-bottom:40px;">
+                            COMUNICACIÓN DE VACACIONES
+                        </h2>
+
+                        <p>
+                            Sr./a.
+                        </p>
+
+                        <p>
+                            <strong>
+                                <span t-esc="o.employee_id.name"/>
+                            </strong>
+                        </p>
+
+                        <p>
+                            Presente
+                        </p>
+
+                        <br/>
+
+                        <p style="text-align: justify; line-height: 2;">
+
+                            Tengo el agrado de dirigirme a Ud.
+                            a fin de notificarle que las vacaciones
+                            que le corresponden, de acuerdo a su
+                            antigüedad, de
+
+                            <strong>
+                                <span t-esc="int((o.date_to - o.date_from).days + 1)"/>
+                                días
+                            </strong>
+
+                            correspondientes al período
+
+                            <strong>
+                                <span t-esc="o.date_from.year"/>
+                            </strong>,
+
+                            las podrá usufructuar a partir del día
+
+                            <strong>
+                                <span t-esc="o.date_from.strftime('%d/%m/%Y')"/>
+                            </strong>
+
+                            hasta el
+
+                            <strong>
+                                <span t-esc="o.date_to.strftime('%d/%m/%Y')"/>
+                            </strong>,
+
+                            inclusive, debiendo reintegrarse a sus
+                            labores en fecha
+
+                            <strong>
+                                <span></span>
+                            </strong>
+
+                            a su puesto de trabajo y en su horario habitual.
+
+                        </p>
+
+                        <p style="text-align: justify; line-height: 2;">
+
+                            El importe correspondiente a los días
+                            de vacaciones estará a su disposición
+                            el último día de trabajo antes del inicio
+                            de sus vacaciones.
+
+                        </p>
+
+                        <p>
+                            Sírvase firmar la presente como constancia
+                            de notificación.
+                        </p>
+
+                        <p>
+                            Sin otro motivo en particular,
+                            le saludo atentamente.
+                        </p>
+
+                        <br/>
+                        <br/>
+                        <br/>
+                        <br/>
+
+                        <div style="text-align:center;">
+
+                            _________________________________
+                            <br/>
+                            <br/>
+                            <span >
+                                 GESTIÓN DE PERSONAS
+                            </span>
+                           
+
+                        </div>
+
+                        <br/>
+                        <br/>
+                        <br/>
+                        <br/>
+                        <br/>
+
+                        <p>
+                            Recibí la presente notificación:
+                        </p>
+
+                        <br/>
+                        <br/>
+                        <br/>
+
+                        <div style="text-align:center;">
+
+                            _____________________________
+                            <br/>
+                             <br/>
+                            FIRMA
+
+                        </div>
+
+                        <br/>
+                        <br/>
+
+                        <p>
+                            Aclaración:
+                            ___________________________________________
+                        </p>
+
+                    </div>
+
+                </t>
+
+            </t>
+        </t>
+
+    </template>
+
+    <record id="action_report_holiday_notification" model="ir.actions.report">
+        <field name="name">Notificación de Vacaciones</field>
+        <field name="model">hr.payslip</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hr_holiday_attendance_views.report_holiday_notification</field>
+        <field name="print_report_name">'Notificacion_Vacaciones_%s' % object.employee_id.name</field>
+    </record>
+
+</odoo>

@@ -6,7 +6,7 @@ class PayrollStructure(models.Model):
     _inherit = 'hr.payroll.structure'
 
     is_final_liquidation = fields.Boolean('Es liquidación final')
-
+    is_holiday_liquidation = fields.Boolean('Liqudación de vacaciones')
 
 class Payslip(models.Model):
     _inherit = 'hr.payslip'
@@ -25,3 +25,4 @@ class Payslip(models.Model):
         ('sustitucion_empleador', 'Sustitución del Empleador'),
         ('mutuo_acuerdo', 'Mutuo Acuerdo (colaboradores estables)'),
     ], string='Tipo de Baja')
+    

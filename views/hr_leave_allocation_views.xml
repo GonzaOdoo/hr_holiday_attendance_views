@@ -35,11 +35,13 @@
             <field name="model">hr.leave.liquidation</field>
             <field name="arch" type="xml">
                 <list>
-                    <field name="employee_id"/>
-                    <field name="allocation_id"/>
-                    <field name="date_start"/>
-                    <field name="days"/>
-                    <field name="company_id"/>
+                    <field name="employee_id" string="Empleado"/>
+                    <field name="allocation_id" string="Asignación"/>
+                    <field name="date_start" string="Inicio"/>
+                    <field name="date_end" string="Fin"/>
+                    <field name="days" string="Duración (días)"/>
+                    <button string="Crear recibo de nómina" name="action_create_payslip" type="object" invisible="has_payslip"></button>
+                    <field name="payslip_id" string="Recibo" widget="res_partner_many2one"></field>
                 </list>
             </field>
         </record>
@@ -49,13 +51,16 @@
             <field name="model">hr.leave.liquidation</field>
             <field name="arch" type="xml">
                 <form>
+                    <header>
+                        <button string="Crear recibo de nómina" name="action_create_payslip" type="object" invisible="has_payslip"></button>
+                    </header>
                     <sheet>
                         <group>
-                            <field name="employee_id"/>
-                            <field name="allocation_id"/>
-                            <field name="date_start"/>
-                            <field name="days"/>
-                            <field name="company_id" readonly="1"/>
+                            <field name="employee_id" string="Empleado"/>
+                            <field name="allocation_id" string="Asignación"/>
+                            <field name="date_start" string="Inicio"/>
+                            <field name="days" string="Duración (días)"/>
+                            
                         </group>
                     </sheet>
                 </form>

@@ -30,6 +30,9 @@ class HrContract(models.Model):
     )
     struct_type = fields.Selection('Tipo de estructura',related='struct_id.schedule_pay')
 
+    leave_liquidation_id = fields.Many2one( 'hr.leave.liquidation', string='Liquidación de vacaciones', ondelete='set null', copy=False, )
+    is_holiday = fields.Boolean('Es vacación',related='struct_id.is_holiday_liquidation')
+
     @api.depends('date_to')  # Solo depende de date_to, porque es nuestra referencia
     def _compute_date_events(self):
         for payslip in self:
@@ -269,7 +272,34 @@ class HrContract(models.Model):
                 _logger.info("Agregada ausencia no justificada: %d días", unjustified_days)
             else:
                 _logger.warning("Tipo 'UNJUSTIFIED' no encontrado; ausencia no agregada.")
-    
+
+
+        # =====================================
+        # Liquidaciones de vacaciones
+        # =====================================
+        _logger.info("Buscando liquidaciones")
+        liquidations = self.env['hr.leave.liquidation'].search([
+            ('employee_id', '=', self.employee_id.id),
+            ('date_start', '<=', self.date_to),
+            ('date_end', '>=', self.date_from),
+        ])
+        
+        if liquidations:
+            work_entry_type = self.env.ref(
+                '__export__.hr_work_entry_type_22_1d246d7a',
+                raise_if_not_found=False
+            )
+        
+            if work_entry_type:
+                liquidated_days = sum(liquidations.mapped('days'))
+        
+                res.append({
+                    'sequence': work_entry_type.sequence,
+                    'work_entry_type_id': work_entry_type.id,
+                    'number_of_days': liquidated_days,
+                    'number_of_hours': liquidated_days * hours_per_day,
+                })
+                _logger.info(res)
         # Ordenar y retornar
         work_entry_type = self.env['hr.work.entry.type']
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
@@ -1113,3 +1143,12 @@ class HrContract(models.Model):
             'state': 'paid',
             'paid_date': paid_date,
         })
+
+
+
+    def action_print_holiday_notification(self):
+        self.ensure_one()
+    
+        return self.env.ref(
+            'hr_holiday_attendance_views.action_report_holiday_notification'
+        ).report_action(self)

@@ -15,6 +15,7 @@
             'views/report_templates_holiday.xml',
             'views/report_templates_bonus.xml',
             'views/report_assistance.xml',
+            'views/report_notification.xml',
             'views/hr_allocations_views.xml',
             'views/attendance_views.xml',
             'views/leave_form_custom.xml',
