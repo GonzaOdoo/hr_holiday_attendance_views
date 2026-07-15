@@ -20,6 +20,7 @@ class HrPayslipWorkedDays(models.Model):
         late_type = self.env['hr.work.entry.type'].search([('code', '=', 'LATE')], limit=1)
         leave_types = self.env['hr.work.entry.type'].search([('is_leave', '=', True)])
         off_days_type= self.env['hr.work.entry.type'].search([('code', '=', 'UNJUSTIFIED')], limit=1)
+        liquidation_days_type = self.env['hr.work.entry.type'].search([('code', '=', 'VACACIONESL')], limit=1)
         # Estructuras a excluir (ej. US)
         us_structures = self.env['hr.payroll.structure'].search([('code', '=', 'USMONTHLY')])
 
@@ -29,6 +30,7 @@ class HrPayslipWorkedDays(models.Model):
         regular_worked_days = self.env['hr.payslip.worked_days']
         late_worked_days = self.env['hr.payslip.worked_days']
         leave_worked_days = self.env['hr.payslip.worked_days']
+        liquidation_days = self.env['hr.payslip.worked_days']
         off_days = self.env['hr.payslip.worked_days']
         for wd in self:
             _logger.info(wd.work_entry_type_id)
@@ -52,6 +54,8 @@ class HrPayslipWorkedDays(models.Model):
                 leave_worked_days |= wd
             elif wd.work_entry_type_id in off_days_type:
                 off_days |= wd
+            elif wd.work_entry_type_id in liquidation_days_type:
+                liquidation_days |= wd
             else:
                 other_worked_days |= wd
             _logger.info(off_days)
@@ -181,5 +185,17 @@ class HrPayslipWorkedDays(models.Model):
             wd.amount = -(daily_rate * days)
         
             _logger.info(f"Ausencia {wd.work_entry_type_id.name}: {days} días → Monto = {wd.amount:.2f} (tasa diaria: {daily_rate:.2f})")
+        for wd in liquidation_days:
+            contract = wd.payslip_id.contract_id
+            days = wd.number_of_days  # ¡Importante! Usar días, no horas
+            
+            if not contract or wd.payslip_id.wage_type != 'monthly':
+                wd.amount = 0.0
+                continue
+            # Calcular tasa diaria: salario mensual / 30
+            daily_rate = contract.wage / 30.0
+            wd.amount = daily_rate * days
+        
+            _logger.info(f"Liquidacion {wd.work_entry_type_id.name}: {days} días → Monto = {wd.amount:.2f} (tasa diaria: {daily_rate:.2f})")
         # === Dejar el resto al cálculo original (incluye horas regulares, licencias, etc.) ===
         super(HrPayslipWorkedDays, other_worked_days)._compute_amount()

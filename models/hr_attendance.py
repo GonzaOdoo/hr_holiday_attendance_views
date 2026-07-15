@@ -110,6 +110,41 @@ class HrContract(models.Model):
         compute='_compute_overtime_amount',
         store=False
     )
+
+    out_of_schedule = fields.Boolean(
+        string="Fuera de horario",
+        compute="_compute_out_of_schedule",
+        store=True,
+        index=True,
+    )
+
+    @api.depends(
+        "check_in",
+        "check_out",
+        "scheduled_check_in",
+        "scheduled_check_out",
+    )
+    def _compute_out_of_schedule(self):
+        limit = timedelta(hours=1)
+
+        for attendance in self:
+            attendance.out_of_schedule = False
+
+            if (
+                not attendance.check_in
+                or not attendance.check_out
+                or not attendance.scheduled_check_in
+                or not attendance.scheduled_check_out
+            ):
+                continue
+
+            check_in_diff = abs(attendance.check_in - attendance.scheduled_check_in)
+            check_out_diff = abs(attendance.check_out - attendance.scheduled_check_out)
+
+            attendance.out_of_schedule = (
+                check_in_diff >= limit
+                and check_out_diff >= limit
+            )
     
     @api.depends('overtime_night','overtime_day','night_hours')
     def _compute_overtime_amount(self):

@@ -371,9 +371,16 @@ class HrLeaveAllocationReport(models.Model):
             period_end = period_start + relativedelta(years=1) - relativedelta(days=1)
     
             # Buscar tipo de ausencia de vacaciones
-            leave_type = self.env.ref('hr_holidays.holiday_status_cl', raise_if_not_found=False)
-            if not leave_type:
-                leave_type = self.env['hr.leave.type'].search([('requires_allocation', '!=', 'no')], limit=1)
+            leave_type = self.env['hr.leave.type'].with_context(active_test=False).search(
+                [
+                    ('active', '=', True),
+                    ('requires_allocation', '!=', 'no'),
+                    ('leave_validation_type', '=', 'both'),
+                ],
+                order='sequence ASC, id ASC',
+                limit=1,
+            )
+            _logger.info(leave_type)
             if not leave_type:
                 raise UserError(_("No se encontró un tipo de ausencia válido para asignaciones."))
             existing = self.env['hr.leave.allocation'].search([
@@ -406,7 +413,6 @@ class HrLeaveAllocationReport(models.Model):
         if to_validate:
             to_validate.action_approve()
             to_validate.action_validate()
-    
         return
 
     @api.model

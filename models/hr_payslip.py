@@ -232,6 +232,28 @@ class HrContract(models.Model):
         #leave_days += unjustified_days  # ← ¡Esto es clave!
         _logger.info("Injustificadas")
         _logger.info(unjustified_days)
+        # c) Vacaciones liquidadas
+        liquidated_days = 0
+
+        liquidations = self.env['hr.leave.liquidation'].search([
+            ('employee_id', '=', self.employee_id.id),
+            ('date_start', '<=', self.date_to),
+            ('date_end', '>=', self.date_from),
+        ])
+        
+        for liquidation in liquidations:
+            overlap_start = max(liquidation.date_start, self.date_from)
+            overlap_end = min(liquidation.date_end, self.date_to)
+            
+            if overlap_start <= overlap_end:
+                liquidated_days += self._count_work_days(
+                    self.employee_id,
+                    overlap_start,
+                    overlap_end,
+                )
+                    
+        _logger.info("Días liquidados imputados al período: %s", liquidated_days)
+        _logger.info("Días liquidados de vacaciones: %s", liquidated_days)
         # === Paso 2: Generar líneas de asistencia ===
         for work_entry_type_id, hours in work_hours_ordered:
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
@@ -243,7 +265,7 @@ class HrContract(models.Model):
     
             if work_entry_type.code == 'WORK100':
                     # Nómina normal: 30 días base, menos días fuera de contrato, menos ausencias
-                    effective_base = max_workable_days - leave_days
+                    effective_base = max_workable_days - liquidated_days
                     day_rounded = max(0, round(effective_base, 5))
                     day_rounded = self._round_days(work_entry_type, day_rounded)
             if work_entry_type.code in ['OVERTIME_EVENING', 'OVERTIME_NIGHT', 'OVERTIME']:
@@ -277,32 +299,50 @@ class HrContract(models.Model):
         # =====================================
         # Liquidaciones de vacaciones
         # =====================================
-        _logger.info("Buscando liquidaciones")
-        liquidations = self.env['hr.leave.liquidation'].search([
-            ('employee_id', '=', self.employee_id.id),
-            ('date_start', '<=', self.date_to),
-            ('date_end', '>=', self.date_from),
-        ])
-        
         if liquidations:
             work_entry_type = self.env.ref(
-                '__export__.hr_work_entry_type_22_1d246d7a',
+                '__export__.hr_work_entry_type_22_32dfeeeb',
                 raise_if_not_found=False
             )
         
             if work_entry_type:
-                liquidated_days = sum(liquidations.mapped('days'))
-        
                 res.append({
                     'sequence': work_entry_type.sequence,
                     'work_entry_type_id': work_entry_type.id,
                     'number_of_days': liquidated_days,
                     'number_of_hours': liquidated_days * hours_per_day,
                 })
-                _logger.info(res)
         # Ordenar y retornar
         work_entry_type = self.env['hr.work.entry.type']
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
+
+    def _count_work_days(self,employee, date_from, date_to):
+        calendar = employee.resource_calendar_id
+    
+        if not calendar:
+            return (date_to - date_from).days + 1
+    
+        tz = pytz.timezone(employee.tz or 'UTC')
+    
+        work_days = 0
+        current_day = date_from
+    
+        while current_day <= date_to:
+            day_start = tz.localize(datetime.combine(current_day, datetime.min.time()))
+            day_end = tz.localize(datetime.combine(current_day, datetime.max.time()))
+    
+            daily_hours = calendar.get_work_hours_count(
+                start_dt=day_start,
+                end_dt=day_end,
+                compute_leaves=True,
+            )
+    
+            if daily_hours > 0:
+                work_days += 1
+    
+            current_day += timedelta(days=1)
+    
+        return work_days
 
     def _get_unjustified_absence_days(self, hours_per_day):
         """Devuelve el número de días laborables SIN entrada de trabajo dentro de la vigencia del contrato."""
@@ -623,7 +663,7 @@ class HrContract(models.Model):
         # Soporta múltiples recibos
         if not self:
             return
-    
+        _logger.info("Ejecutando reporte!!!")
         output = io.BytesIO()
         workbook = xlsxwriter.Workbook(output, {'in_memory': True})
         worksheet = workbook.add_worksheet('Nómina por Concepto')
@@ -657,6 +697,10 @@ class HrContract(models.Model):
             'WORK100': 'BASIC',
             'GUARD_DIURNA': 'GUARD_ASIG',
             'GUARD_NOCHE': 'GUARD_ASIG_NOCHE',
+            'OVERTIME_EVENING': 'HEX50',
+            'OVERTIME_NIGHT': 'HNOC30',
+            'UNJUSTIFIED':'AUSENCIA_NJ',
+            'LEAVE90': 'DESC_TIEMPO_PERSONAL',
             # Agrega aquí más mapeos según necesites
         }
     
@@ -795,7 +839,7 @@ class HrContract(models.Model):
             # Diccionarios por código
             wd_dict = {wd.code: wd.number_of_days or wd.number_of_hours for wd in slip.worked_days_line_ids}
             input_dict = {inp.code: inp.amount for inp in slip.input_line_ids}
-            salary_dict = {line.code: line.amount for line in slip.line_ids}
+            salary_dict = {line.code: line.total for line in slip.line_ids}
     
             # Llenar columnas
             for code in sorted_codes:
@@ -1152,3 +1196,38 @@ class HrContract(models.Model):
         return self.env.ref(
             'hr_holiday_attendance_views.action_report_holiday_notification'
         ).report_action(self)
+
+    def get_return_to_work_date(self):
+        self.ensure_one()
+    
+        calendar = self.employee_id.resource_calendar_id
+        if not calendar:
+            return self.date_to + timedelta(days=1)
+    
+        tz = pytz.timezone(self.employee_id.tz or 'UTC')
+    
+        current_day = self.date_to + timedelta(days=1)
+    
+        # Buscamos hasta 30 días por seguridad
+        for _i in range(30):
+    
+            day_start = tz.localize(
+                datetime.combine(current_day, datetime.min.time())
+            )
+    
+            day_end = tz.localize(
+                datetime.combine(current_day, datetime.max.time())
+            )
+    
+            daily_hours = calendar.get_work_hours_count(
+                start_dt=day_start,
+                end_dt=day_end,
+                compute_leaves=True,
+            )
+    
+            if daily_hours > 0:
+                return current_day
+    
+            current_day += timedelta(days=1)
+    
+        return False
