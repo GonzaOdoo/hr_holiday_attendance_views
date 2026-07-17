@@ -62,7 +62,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -170,7 +170,7 @@
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <p style=" font-size: 12px; color: #444;"/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -178,7 +178,7 @@
                                         <p style="margin-top: -15px; font-size: 12px; color: #444;">Recibí conforme</p>
                                     </div>
                                     <div class="col-4">
-                                        <p style="font-size: 12px; color: #444;">Firma digital</p>
+                                        <p style="font-size: 12px; color: #444;"/>
                                     </div>
                                 </div>
                             </div>
@@ -221,7 +221,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -329,7 +329,7 @@
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <p style=" font-size: 12px; color: #444;"/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -337,7 +337,7 @@
                                         <p style="margin-top: -15px; font-size: 12px; color: #444;">Recibí conforme</p>
                                     </div>
                                     <div class="col-4">
-                                        <p style="font-size: 12px; color: #444;">Firma digital</p>
+                                        <p style="font-size: 12px; color: #444;"/>
                                     </div>
                                 </div>
                             </div>
@@ -385,7 +385,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -493,7 +493,7 @@
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <p style=" font-size: 12px; color: #444;"/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -501,7 +501,7 @@
                                         <p style="margin-top: -15px; font-size: 12px; color: #444;">Recibí conforme</p>
                                     </div>
                                     <div class="col-4">
-                                        <p style="font-size: 12px; color: #444;">Firma digital</p>
+                                        <p style="font-size: 12px; color: #444;"/>
                                     </div>
                                 </div>
                             </div>
@@ -544,7 +544,7 @@
                                             <strong>NᵒPatr. MTESS:</strong> <t t-esc="first.employee_id.mtess_patronal"/>
                                         </p>
                                         <p style="margin: 0.2px 0; font-size: 11px; color: #444;">
-                                            <strong>Fecha:</strong> <t t-esc="first.date_to.strftime('%d/%m/%Y') if first.date_to else 'N/A'"/>
+                                            <strong>Fecha:</strong> <t t-esc="first.paid_date.strftime('%d/%m/%Y') if first.paid_date else 'N/A'"/>
                                         </p>
 
                                         
@@ -652,7 +652,7 @@
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
-                                        <p style=" font-size: 12px; color: #444;"><span t-field="first.paid_date"/></p>
+                                        <p style=" font-size: 12px; color: #444;"/>
                                         <!--<p style="margin-top: -15px; font-size: 12px; color: #444;">Fecha</p>-->
                                     </div>
                                     <div class="col-4" style="text-align:center">
@@ -660,7 +660,7 @@
                                         <p style="margin-top: -15px; font-size: 12px; color: #444;">Recibí conforme</p>
                                     </div>
                                     <div class="col-4">
-                                        <p style="font-size: 12px; color: #444;">Firma digital</p>
+                                        <p style="font-size: 12px; color: #444;"/>
                                     </div>
                                 </div>
                             </div>

@@ -2,20 +2,18 @@
 
     <template id="report_holiday_notification">
 
+        
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="o">
 
                 <t t-call="web.basic_layout">
 
-                    <div class="page"
-                         style="padding: 60px 80px; font-size: 14px;">
+                    <div class="page" style="padding: 60px 80px; font-size: 14px;">
 
                         <!-- Logo -->
                         <div style="text-align:center; margin-bottom: 30px;">
 
-                            <img t-if="o.company_id.logo"
-                                 t-att-src="image_data_uri(o.company_id.logo)"
-                                 style="max-height: 120px; max-width: 300px;"/>
+                            <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)" style="max-height: 120px; max-width: 300px;"/>
 
                         </div>
 
@@ -48,8 +46,8 @@
                             antigüedad, de
 
                             <strong>
-                                <span t-esc="int((o.date_to - o.date_from).days + 1)"/>
-                                días
+                                <span t-esc="int(o.leave_liquidation_id.days)"/>
+                                días,
                             </strong>
 
                             correspondientes al período
@@ -68,13 +66,15 @@
 
                             <strong>
                                 <span t-esc="o.date_to.strftime('%d/%m/%Y')"/>
-                            </strong>,
-
-                            inclusive, debiendo reintegrarse a sus
-                            labores en fecha
+                            </strong>
+                            , inclusive, debiendo reintegrarse a sus
+                            labores en fecha:
+                            <strong>
+                            <span t-esc="o.get_return_to_work_date().strftime('%d/%m/%Y')"/>
+                            </strong>
 
                             <strong>
-                                <span></span>
+                                <span/>
                             </strong>
 
                             a su puesto de trabajo y en su horario habitual.
@@ -110,7 +110,7 @@
                             _________________________________
                             <br/>
                             <br/>
-                            <span >
+                            <span>
                                  GESTIÓN DE PERSONAS
                             </span>
                            
