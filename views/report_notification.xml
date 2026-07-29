@@ -155,6 +155,7 @@
             </t>
         </t>
 
+
     </template>
 
     <record id="action_report_holiday_notification" model="ir.actions.report">

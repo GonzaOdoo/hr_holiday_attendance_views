@@ -249,7 +249,7 @@ class HrContract(models.Model):
             else:
                 attendance.confirmed_late_minutes = 0.0
 
-    @api.depends('employee_id', 'check_in', 'employee_id.shift_change_ids')
+    @api.depends('check_in', 'employee_id.shift_change_ids')
     def _compute_scheduled_attendance_times(self):
         for attendance in self:
     
@@ -518,11 +518,9 @@ class HrContract(models.Model):
 
 
     @api.depends(
-        'worked_hours',
         'check_in',
         'check_out',
-        'scheduled_check_in',
-        'scheduled_check_out'
+        'employee_id',
     )
     def _compute_overtime_hours(self):
         if self.env.context.get('skip_overtime_compute'):
@@ -532,6 +530,12 @@ class HrContract(models.Model):
         fallback_atts = self.env['hr.attendance']
     
         for att in atts:
+            _logger.info(att.employee_id)
+            _logger.info(
+                "%s %s",
+                att.employee_id.name,
+                att.check_in
+            )
             att.overtime_hours = 0.0
     
             if not att.check_in or not att.check_out or not att.employee_id:

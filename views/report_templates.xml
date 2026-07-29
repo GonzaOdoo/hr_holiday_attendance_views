@@ -2,7 +2,7 @@
 <odoo>
     <!-- Plantilla principal del informe -->
     <template id="report_payslip_two_per_page">
-              <t t-call="web.html_container">
+                <t t-call="web.html_container">
             <t t-call="web.basic_layout">
                 <style>
                     .page {
@@ -137,7 +137,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-esc="int(input.total)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -146,7 +146,7 @@
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
                                                         </t>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                            <t t-esc="first.format_amount(line.total)"/>
                                                         </td>
                                                         
                                                     </tr>
@@ -159,7 +159,7 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -197,7 +197,7 @@
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -208,7 +208,7 @@
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
                                             <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
-                                                <t t-esc="first.format_amount(line.amount)"/>
+                                                <t t-esc="first.format_amount(line.total)"/>
                                             </t>
                                         </p>
                                 </div>
@@ -340,7 +340,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-esc="int(input.total)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -349,7 +349,7 @@
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
                                                         </t>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                            <t t-esc="first.format_amount(line.total)"/>
                                                         </td>
                                                         
                                                     </tr>
@@ -362,7 +362,7 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -399,8 +399,8 @@
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -411,7 +411,7 @@
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
                                             <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
-                                                <t t-esc="first.format_amount(line.amount)"/>
+                                                <t t-esc="first.format_amount(line.total)"/>
                                             </t>
                                         </p>
                                 </div>
@@ -548,7 +548,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-esc="int(input.total)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -557,7 +557,7 @@
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
                                                         </t>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                            <t t-esc="first.format_amount(line.total)"/>
                                                         </td>
                                                         
                                                     </tr>
@@ -570,7 +570,7 @@
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -604,11 +604,11 @@
                                             <tfoot>
                                                 <!-- Total Descuentos -->
                                                 <tr>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -751,7 +751,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.amount)"/>
+                                                                    <t t-esc="int(input.total)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -760,7 +760,7 @@
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;"/>
                                                         </t>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(line.amount)"/>
+                                                            <t t-esc="first.format_amount(line.total)"/>
                                                         </td>
                                                         
                                                     </tr>
@@ -773,7 +773,7 @@
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.category_id.code in ['BASIC','EXTRA_50','HNOC30','GUARD_ASIG','GUARD_ASIG_NOCHE','ALW']).mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -788,7 +788,7 @@
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
                                                 <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['DED'])" t-as="line">
-                                                    <t t-if="line.amount != 0">
+                                                    <t t-if="line.total != 0">
                                                         <tr>
                                                             <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold;">
                                                                
@@ -807,11 +807,11 @@
                                             <tfoot>
                                                 <!-- Total Descuentos -->
                                                 <tr>
-                                                    <td style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
+                                                    <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; font-weight: bold; text-align: left;">
                                                         Subotal
                                                     </td>
                                                     <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(-1 * sum(first.line_ids.filtered(lambda l: l.category_id.code == 'DED').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -822,7 +822,7 @@
                                     <p style="margin: 0.5px 0; font-size: 12px; color: #444;">
                                             <strong>Neto a cobrar:</strong>
                                             <t t-foreach="first.line_ids.filtered(lambda l: l.category_id.code in ['NET'])" t-as="line">
-                                                <t t-esc="first.format_amount(line.amount)"/>
+                                                <t t-esc="first.format_amount(line.total)"/>
                                             </t>
                                         </p>
                                 </div>
