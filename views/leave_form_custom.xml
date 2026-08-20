@@ -1,361 +1,407 @@
 <odoo>
   <template id="leave_form_custom" name="Formulario de Ausencia Personalizado">
-             <t t-call="website.layout">
-      <div id="balances-data" t-att-data-balances="balances" style="display: none;"/>
-      <div id="shift-change-data" t-att-data-shift="leave_types_shift_json" style="display:none;"/>
-      <div class="container mt-4">
-
-        <h2 class="mb-4">Solicitud de Tiempo Personal</h2>
-
-        <t t-if="error">
-          <div class="alert alert-danger" role="alert">
-            <t t-esc="error"/>
-          </div>
-        </t>
-
-        <form method="post" action="/permisos/submit" enctype="multipart/form-data">
-          <!-- Empleado (solo lectura, es el del usuario) -->
-          <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Empleado</label>
-            <div class="col-sm-9">
-              <input type="text" class="form-control" t-att-value="leave.employee_id.name" readonly="1"/>
-              <input type="hidden" name="employee_id" t-att-value="leave.employee_id.id"/>
-            </div>
-          </div>
-
-          
-
-          <!-- Tipo de ausencia -->
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Tipo de tiempo personal <span class="text-danger">*</span></label>
-            <div class="col-sm-9">
-              <select name="holiday_status_id" class="form-select" required="1">
-                <option value="">-- Seleccione --</option>
-                <t t-foreach="leave_types" t-as="lt">
-                  <option t-att-value="lt.id" t-att-selected="leave.holiday_status_id.id == lt.id">
-                    <t t-esc="lt.name"/>
-                  </option>
-                </t>
-              </select>
-            </div>
-          </div>
-          <div id="saldo-dinamico" class="mb-3 row" style="display:none;">
-              <div class="col-sm-9 offset-sm-3">
-                <div class="alert alert-info">
-                  <strong>Saldo:</strong> <span id="saldo-texto"/>
+                          <t t-call="website.layout">
+          <div id="balances-data" t-att-data-balances="balances" style="display: none;"/>
+          <div id="shift-change-data" t-att-data-shift="leave_types_shift_json" style="display:none;"/>
+          <div class="container mt-4">
+    
+            <h2 class="mb-4">Solicitud de Tiempo Personal</h2>
+    
+            <t t-if="error">
+              <div class="alert alert-danger" role="alert">
+                <t t-esc="error"/>
+              </div>
+            </t>
+    
+            <form method="post" action="/permisos/submit" enctype="multipart/form-data">
+              <!-- Empleado (solo lectura, es el del usuario) -->
+              <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+              <div class="mb-3 row">
+                <label class="col-sm-3 col-form-label">Empleado</label>
+                <div class="col-sm-9">
+                  <input type="text" class="form-control" t-att-value="leave.employee_id.name" readonly="1"/>
+                  <input type="hidden" name="employee_id" t-att-value="leave.employee_id.id"/>
                 </div>
               </div>
-            </div>
-          <div id="tipo-reposo-field" class="mb-2 row" style="display:none;">
-              <label class="col-sm-3 col-form-label">Tipo de reposo <span class="text-danger">*</span></label>
-              <div class="col-sm-9">
-                <select name="tipo_enfermedad" class="form-select">
-                  <option value="">-- Seleccione --</option>
-                  <option value="ips">Con reposo IPS</option>
-                  <option value="privado">Con reposo privado</option>
-                </select>
+    
+              
+    
+              <!-- Tipo de ausencia -->
+              <div class="mb-3 row">
+                <label class="col-sm-3 col-form-label">Tipo de tiempo personal <span class="text-danger">*</span></label>
+                <div class="col-sm-9">
+                  <select name="holiday_status_id" class="form-select" required="1">
+                    <option value="">-- Seleccione --</option>
+                    <t t-foreach="leave_types" t-as="lt">
+                      <option t-att-value="lt.id" t-att-selected="leave.holiday_status_id.id == lt.id">
+                        <t t-esc="lt.name"/>
+                      </option>
+                    </t>
+                  </select>
+                </div>
               </div>
+              <div id="saldo-dinamico" class="mb-3 row" style="display:none;">
+                  <div class="col-sm-9 offset-sm-3">
+                    <div class="alert alert-info">
+                      <strong>Saldo:</strong> <span id="saldo-texto"/>
+                    </div>
+                  </div>
+                </div>
+              <div id="tipo-reposo-field" class="mb-2 row" style="display:none;">
+                  <label class="col-sm-3 col-form-label">Tipo de reposo <span class="text-danger">*</span></label>
+                  <div class="col-sm-9">
+                    <select name="tipo_enfermedad" class="form-select">
+                      <option value="">-- Seleccione --</option>
+                      <option value="ips">Con reposo IPS</option>
+                      <option value="privado">Con reposo privado</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="text-center">
+                    <button type="button" class="btn btn-secondary btn-sm mb-2" id="open-balances-modal" style="padding:5px;">
+                        Ver todos los disponibles
+                    </button>
+                </div>
+              <!-- Mostrar saldo SOLO si ya se eligió un tipo -->
+    
+              <!-- Fechas -->
+              <div class="mb-3 row">
+                <label class="col-sm-3 col-form-label">Fecha <span class="text-danger">*</span></label>
+                <div class="col-sm-4">
+                    <label class="form-label small">Desde</label>
+                    <input type="date" name="request_date_from" class="form-control" t-att-value="leave.request_date_from"/>
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label small">Hasta</label>
+                    <input type="date" name="request_date_to" class="form-control" t-att-value="leave.request_date_to"/>
+                </div>
             </div>
-            <div class="text-center">
-                <button type="button" class="btn btn-secondary btn-sm mb-2" id="open-balances-modal" style="padding:5px;">
-                    Ver todos los disponibles
-                </button>
-            </div>
-          <!-- Mostrar saldo SOLO si ya se eligió un tipo -->
-
-          <!-- Fechas -->
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Fecha <span class="text-danger">*</span></label>
-            <div class="col-sm-4">
-                <label class="form-label small">Desde</label>
-                <input type="date" name="request_date_from" class="form-control" t-att-value="leave.request_date_from"/>
-            </div>
-            <div class="col-sm-4">
-                <label class="form-label small">Hasta</label>
-                <input type="date" name="request_date_to" class="form-control" t-att-value="leave.request_date_to"/>
-            </div>
-        </div>
-        <!--
-          <div class="mb-3 form-check">
-            <input class="form-check-input" type="checkbox" name="request_unit_hours" id="request_unit_hours" t-att-checked="leave.request_unit_hours"/>
-            <label class="form-check-label" for="request_unit_hours">Horas personalizadas</label>
-          </div>
-
-          <div id="horas-personalizadas-field" class="mb-3 row" style="display:none;">
-              <label class="col-sm-3 col-form-label">Hora desde</label>
-              <div class="col-sm-3">
-                <input type="number" step="0.01" name="request_hour_from" class="form-control" t-att-value="leave.request_hour_from"/>
+            <!--
+              <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" name="request_unit_hours" id="request_unit_hours" t-att-checked="leave.request_unit_hours"/>
+                <label class="form-check-label" for="request_unit_hours">Horas personalizadas</label>
               </div>
-              <label class="col-sm-3 col-form-label">Hora hasta</label>
-              <div class="col-sm-3">
-                <input type="number" step="0.01" name="request_hour_to" class="form-control" t-att-value="leave.request_hour_to"/>
+    
+              <div id="horas-personalizadas-field" class="mb-3 row" style="display:none;">
+                  <label class="col-sm-3 col-form-label">Hora desde</label>
+                  <div class="col-sm-3">
+                    <input type="number" step="0.01" name="request_hour_from" class="form-control" t-att-value="leave.request_hour_from"/>
+                  </div>
+                  <label class="col-sm-3 col-form-label">Hora hasta</label>
+                  <div class="col-sm-3">
+                    <input type="number" step="0.01" name="request_hour_to" class="form-control" t-att-value="leave.request_hour_to"/>
+                  </div>
+                </div>
+                -->
+                
+                
+                <!-- Entrada / Salida -->
+                <div id="shifts-field" class="mb-3 row" style="display:none;">
+                  <label class="col-sm-3 col-form-label">Hora de Entrada</label>
+                  <div class="col-sm-3">
+                    <input type="time" name="shift_start" class="form-control" t-att-value="leave.shift_start"/>
+                  </div>
+                  <label class="col-sm-3 col-form-label">Hora de Salida</label>
+                  <div class="col-sm-3">
+                    <input type="time" name="shift_end" class="form-control" t-att-value="leave.shift_end"/>
+                  </div>
+                </div>
+              <!-- Descripción -->
+              <div class="mb-3 row">
+                <label class="col-sm-3 col-form-label">Descripción</label>
+                <div class="col-sm-9">
+                  <input type="text" name="name" class="form-control" t-att-value="leave.name"/>
+                </div>
               </div>
-            </div>
-            -->
-            
-            
-            <!-- Entrada / Salida -->
-            <div id="shifts-field" class="mb-3 row" style="display:none;">
-              <label class="col-sm-3 col-form-label">Hora de Entrada</label>
-              <div class="col-sm-3">
-                <input type="time" name="shift_start" class="form-control" t-att-value="leave.shift_start"/>
+              
+             <!-- Reemplazante -->
+              <div id="replacement-field" class="mb-3 row">
+                <label class="col-sm-3 col-form-label">Reemplazante</label>
+                <div class="col-sm-9">
+                  <select name="replacement" class="form-select">
+                    <option value="">-- Ninguno --</option>
+                    <t t-foreach="employees" t-as="emp">
+                      <option t-att-value="emp.id" t-att-selected="leave.replacement.id == emp.id">
+                        <t t-esc="emp.name"/>
+                      </option>
+                    </t>
+                  </select>
+                </div>
               </div>
-              <label class="col-sm-3 col-form-label">Hora de Salida</label>
-              <div class="col-sm-3">
-                <input type="time" name="shift_end" class="form-control" t-att-value="leave.shift_end"/>
+              
+              <!-- Adjunto -->
+              <div class="mb-3 row">
+                <label class="col-sm-3 col-form-label">
+                    Justificante
+                    <span id="attachment-required" class="text-danger" style="display:none;">*</span>
+                </label>
+                <div class="col-sm-9">
+                    <input type="file" name="attachment_ids" id="attachment_ids" class="form-control"/>
+                    <div id="attachment-help" class="form-text" style="display:none;">
+                        Este tipo de permiso requiere adjuntar un justificante.
+                    </div>
+                </div>
+            </div>
+    
+              <!-- Botón -->
+              <div class="text-center mt-4">
+                <button type="submit" class="btn btn-primary">Enviar Solicitud</button>
               </div>
-            </div>
-          <!-- Descripción -->
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Descripción</label>
-            <div class="col-sm-9">
-              <input type="text" name="name" class="form-control" t-att-value="leave.name"/>
-            </div>
+            </form>
           </div>
-          
-         <!-- Reemplazante -->
-          <div id="replacement-field" class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Reemplazante</label>
-            <div class="col-sm-9">
-              <select name="replacement" class="form-select">
-                <option value="">-- Ninguno --</option>
-                <t t-foreach="employees" t-as="emp">
-                  <option t-att-value="emp.id" t-att-selected="leave.replacement.id == emp.id">
-                    <t t-esc="emp.name"/>
-                  </option>
-                </t>
-              </select>
-            </div>
-          </div>
-          
-          <!-- Adjunto -->
-          <div class="mb-3 row">
-            <label class="col-sm-3 col-form-label">Justificante</label>
-            <div class="col-sm-9">
-              <input type="file" name="attachment_ids" class="form-control"/>
-            </div>
-          </div>
-
-          <!-- Botón -->
-          <div class="text-center mt-4">
-            <button type="submit" class="btn btn-primary">Enviar Solicitud</button>
-          </div>
-        </form>
-      </div>
+           
        
-   
-      
- 
-
-<!-- Popup (modal) oculto por defecto -->
-<div id="balances-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 10000; justify-content: center; align-items: center;">
-  <div style="background: white; padding: 20px; border-radius: 8px; max-width: 70vw; width: 90%; max-height: 80vh; overflow-y: auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-      <h5 style="margin: 0;">Saldos disponibles</h5>
-      <button type="button" class="btn-close" id="close-balances-modal" aria-label="Close"/>
-    </div>
-    <table class="table table-sm">
-      <thead>
-        <tr>
-          <th>Tipo</th>
-          <th>Total</th>
-          <th>Tomados</th>
-          <th>Restantes</th>
-        </tr>
-      </thead>
-      <tbody>
-        <t t-foreach="leave_types" t-as="lt">
-          <t t-set="b" t-value="balances.get(lt.id, {})"/>
-          <tr>
-            <td><t t-esc="lt.name"/></td>
-            <td><t t-esc="b.get('max_leaves', 'N/A')"/></td>
-            <td><t t-esc="b.get('leaves_taken', 'N/A')"/></td>
-            <td><strong><t t-esc="b.get('virtual_remaining_leaves', 'N/A')"/></strong></td>
-          </tr>
-        </t>
-      </tbody>
-    </table>
-    <div class="text-end mt-2">
-      <button class="btn btn-secondary btn-sm" id="close-balances-modal-2">Cerrar</button>
-    </div>
-  </div>
-</div>
-
-
-
-<script>
+          
+     
     
-  document.addEventListener('DOMContentLoaded', function () {
-    const openBtn = document.getElementById('open-balances-modal');
-    const closeBtns = document.querySelectorAll('#close-balances-modal, #close-balances-modal-2');
-    const modal = document.getElementById('balances-modal');
-
-    if (openBtn) {
-      openBtn.addEventListener('click', function () {
-        modal.style.display = 'flex';
-      });
-    }
-
-    closeBtns.forEach(btn =&gt; {
-      btn.addEventListener('click', function () {
-        modal.style.display = 'none';
-      });
-    });
-
-    // Opcional: cerrar al hacer clic fuera del contenido
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) {
-        modal.style.display = 'none';
-      }
-    });
-  });
-</script>
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-  
-    const balances = <t t-raw="balances_json"/>;
-    console.log('Balances:',balances);
-    const leaveTypeSelect = document.querySelector('select[name="holiday_status_id"]');
-    const tipoReposoField = document.getElementById('tipo-reposo-field');
-    const saldoDiv = document.getElementById('saldo-dinamico');
-    const saldoTexto = document.getElementById('saldo-texto');
-
+    <!-- Popup (modal) oculto por defecto -->
+    <div id="balances-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 10000; justify-content: center; align-items: center;">
+      <div style="background: white; padding: 20px; border-radius: 8px; max-width: 70vw; width: 90%; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h5 style="margin: 0;">Saldos disponibles</h5>
+          <button type="button" class="btn-close" id="close-balances-modal" aria-label="Close"/>
+        </div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Total</th>
+              <th>Tomados</th>
+              <th>Restantes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <t t-foreach="leave_types" t-as="lt">
+              <t t-set="b" t-value="balances.get(lt.id, {})"/>
+              <tr>
+                <td><t t-esc="lt.name"/></td>
+                <td><t t-esc="b.get('max_leaves', 'N/A')"/></td>
+                <td><t t-esc="b.get('leaves_taken', 'N/A')"/></td>
+                <td><strong><t t-esc="b.get('virtual_remaining_leaves', 'N/A')"/></strong></td>
+              </tr>
+            </t>
+          </tbody>
+        </table>
+        <div class="text-end mt-2">
+          <button class="btn btn-secondary btn-sm" id="close-balances-modal-2">Cerrar</button>
+        </div>
+      </div>
+    </div>
     
-    function actualizarSaldo(){
-        if (balances[leaveTypeSelect.value]) {
-          const b = balances[leaveTypeSelect.value];
-          let texto = `Total: ${b.max_leaves} | Tomados: ${b.leaves_taken} | Restantes: ${b.virtual_remaining_leaves}`;
-          console.log(texto)
-          if (b.max_leaves != 'N/A'){
-              saldoTexto.textContent = texto;
-              saldoDiv.style.display = 'block';
-          }
-          else{
-            saldoDiv.style.display = 'none';
-          }
-        } else {
-          saldoDiv.style.display = 'none';
+    
+    
+    <script>
+        
+      document.addEventListener('DOMContentLoaded', function () {
+        const openBtn = document.getElementById('open-balances-modal');
+        const closeBtns = document.querySelectorAll('#close-balances-modal, #close-balances-modal-2');
+        const modal = document.getElementById('balances-modal');
+    
+        if (openBtn) {
+          openBtn.addEventListener('click', function () {
+            modal.style.display = 'flex';
+          });
         }
-
+    
+        closeBtns.forEach(btn =&gt; {
+          btn.addEventListener('click', function () {
+            modal.style.display = 'none';
+          });
+        });
+    
+        // Opcional: cerrar al hacer clic fuera del contenido
+        modal.addEventListener('click', function (e) {
+          if (e.target === modal) {
+            modal.style.display = 'none';
+          }
+        });
+      });
+    </script>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+      
+        const balances = <t t-raw="balances_json"/>;
+        console.log('Balances:',balances);
+        const leaveTypeSelect = document.querySelector('select[name="holiday_status_id"]');
+        const tipoReposoField = document.getElementById('tipo-reposo-field');
+        const saldoDiv = document.getElementById('saldo-dinamico');
+        const saldoTexto = document.getElementById('saldo-texto');
+    
+        
+        function actualizarSaldo(){
+            if (balances[leaveTypeSelect.value]) {
+              const b = balances[leaveTypeSelect.value];
+              let texto = `Total: ${b.max_leaves} | Tomados: ${b.leaves_taken} | Restantes: ${b.virtual_remaining_leaves}`;
+              console.log(texto)
+              if (b.max_leaves != 'N/A'){
+                  saldoTexto.textContent = texto;
+                  saldoDiv.style.display = 'block';
+              }
+              else{
+                saldoDiv.style.display = 'none';
+              }
+            } else {
+              saldoDiv.style.display = 'none';
+            }
+    
+        }
+        
+        if (!leaveTypeSelect || !tipoReposoField) return;
+    
+        function toggleTipoReposo() {
+          if (leaveTypeSelect.value === '2') {
+            tipoReposoField.style.display = 'flex';
+            tipoReposoField.style.flexDirection = 'row';
+            tipoReposoField.style.alignItems = 'center';
+          } else {
+            tipoReposoField.style.display = 'none';
+            // Opcional: limpiar el valor si se oculta
+            tipoReposoField.querySelector('select').value = '';
+          }
+        }
+    
+        // Ejecutar al cargar (por si ya hay un valor preseleccionado)
+        toggleTipoReposo();
+        actualizarSaldo()
+    
+        // Escuchar cambios
+        leaveTypeSelect.addEventListener('change', toggleTipoReposo);
+        leaveTypeSelect.addEventListener('change', actualizarSaldo);
+      });
+    </script>
+    
+    <script type="text/javascript">
+    
+    document.addEventListener('DOMContentLoaded', function () {
+    
+      const shiftData = JSON.parse(
+        document.getElementById('shift-change-data').dataset.shift || "{}"
+      );
+    
+      const leaveTypeSelect = document.querySelector('select[name="holiday_status_id"]');
+      const shiftsField = document.getElementById('shifts-field');
+      const replacementField = document.getElementById('replacement-field');
+    
+      if (!leaveTypeSelect) return;
+    
+      function toggleShiftFields() {
+        const selectedId = leaveTypeSelect.value;
+    
+        if (selectedId &amp;&amp; shiftData[selectedId] === true) {
+    
+          // mostrar horas
+          if (shiftsField) {
+            shiftsField.style.display = 'flex';
+            shiftsField.style.flexDirection = 'row';
+            shiftsField.style.alignItems = 'center';
+          }
+    
+          // ocultar reemplazante
+          if (replacementField) {
+            replacementField.style.display = 'none';
+            const select = replacementField.querySelector('select');
+            if (select) select.value = '';
+          }
+    
+        } else {
+    
+          // ocultar horas
+          if (shiftsField) {
+            shiftsField.style.display = 'none';
+          }
+    
+          const startInput = document.querySelector('input[name="shift_start"]');
+          const endInput = document.querySelector('input[name="shift_end"]');
+          if (startInput) startInput.value = '';
+          if (endInput) endInput.value = '';
+    
+          // mostrar reemplazante
+          if (replacementField) {
+            replacementField.style.display = 'flex';
+          }
+        }
+      }
+      function timeToFloat(timeStr){
+      if (!timeStr) return 0;
+    
+      const parts = timeStr.split(':');
+      const hours = parseInt(parts[0]);
+      const minutes = parseInt(parts[1]);
+    
+      return hours + (minutes / 60);
     }
     
-    if (!leaveTypeSelect || !tipoReposoField) return;
-
-    function toggleTipoReposo() {
-      if (leaveTypeSelect.value === '2') {
-        tipoReposoField.style.display = 'flex';
-        tipoReposoField.style.flexDirection = 'row';
-        tipoReposoField.style.alignItems = 'center';
-      } else {
-        tipoReposoField.style.display = 'none';
-        // Opcional: limpiar el valor si se oculta
-        tipoReposoField.querySelector('select').value = '';
+    
+      toggleShiftFields();
+      leaveTypeSelect.addEventListener('change', toggleShiftFields);
+    
+    });
+    
+    </script>
+    <script type="text/javascript">
+    
+    document.addEventListener('DOMContentLoaded', function () {
+    
+      const dateFrom = document.querySelector('input[name="request_date_from"]');
+      const dateTo = document.querySelector('input[name="request_date_to"]');
+    
+      if (!dateFrom || !dateTo) return;
+    
+      function syncDates() {
+        if (dateFrom.value &amp;&amp; dateTo.value &amp;&amp; dateTo.value &lt; dateFrom.value) {
+          dateTo.value = dateFrom.value;
+        }
       }
-    }
-
-    // Ejecutar al cargar (por si ya hay un valor preseleccionado)
-    toggleTipoReposo();
-    actualizarSaldo()
-
-    // Escuchar cambios
-    leaveTypeSelect.addEventListener('change', toggleTipoReposo);
-    leaveTypeSelect.addEventListener('change', actualizarSaldo);
-  });
-</script>
-
-<script type="text/javascript">
-
-document.addEventListener('DOMContentLoaded', function () {
-
-  const shiftData = JSON.parse(
-    document.getElementById('shift-change-data').dataset.shift || "{}"
-  );
-
-  const leaveTypeSelect = document.querySelector('select[name="holiday_status_id"]');
-  const shiftsField = document.getElementById('shifts-field');
-  const replacementField = document.getElementById('replacement-field');
-
-  if (!leaveTypeSelect) return;
-
-  function toggleShiftFields() {
-    const selectedId = leaveTypeSelect.value;
-
-    if (selectedId &amp;&amp; shiftData[selectedId] === true) {
-
-      // mostrar horas
-      if (shiftsField) {
-        shiftsField.style.display = 'flex';
-        shiftsField.style.flexDirection = 'row';
-        shiftsField.style.alignItems = 'center';
-      }
-
-      // ocultar reemplazante
-      if (replacementField) {
-        replacementField.style.display = 'none';
-        const select = replacementField.querySelector('select');
-        if (select) select.value = '';
-      }
-
-    } else {
-
-      // ocultar horas
-      if (shiftsField) {
-        shiftsField.style.display = 'none';
-      }
-
-      const startInput = document.querySelector('input[name="shift_start"]');
-      const endInput = document.querySelector('input[name="shift_end"]');
-      if (startInput) startInput.value = '';
-      if (endInput) endInput.value = '';
-
-      // mostrar reemplazante
-      if (replacementField) {
-        replacementField.style.display = 'flex';
-      }
-    }
-  }
-  function timeToFloat(timeStr){
-  if (!timeStr) return 0;
-
-  const parts = timeStr.split(':');
-  const hours = parseInt(parts[0]);
-  const minutes = parseInt(parts[1]);
-
-  return hours + (minutes / 60);
-}
-
-
-  toggleShiftFields();
-  leaveTypeSelect.addEventListener('change', toggleShiftFields);
-
-});
-
-</script>
-<script type="text/javascript">
-
-document.addEventListener('DOMContentLoaded', function () {
-
-  const dateFrom = document.querySelector('input[name="request_date_from"]');
-  const dateTo = document.querySelector('input[name="request_date_to"]');
-
-  if (!dateFrom || !dateTo) return;
-
-  function syncDates() {
-    if (dateFrom.value &amp;&amp; dateTo.value &amp;&amp; dateTo.value &lt; dateFrom.value) {
-      dateTo.value = dateFrom.value;
-    }
-  }
-  
-
-  dateFrom.addEventListener('change', syncDates);
-  dateTo.addEventListener('change', syncDates);
-
-});
-
-</script>
-
-    </t>
+      
+    
+      dateFrom.addEventListener('change', syncDates);
+      dateTo.addEventListener('change', syncDates);
+    
+    });
+    
+    </script>
+    
+    <script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function () {
+    
+        const attachmentRequirements = <t t-raw="leave_types_attachment_json"/>;
+        const leaveTypeSelect = document.querySelector(
+            'select[name="holiday_status_id"]'
+        );
+        const attachmentInput = document.getElementById('attachment_ids');
+        const attachmentRequired = document.getElementById('attachment-required');
+        const attachmentHelp = document.getElementById('attachment-help');
+    
+        if (!leaveTypeSelect || !attachmentInput) {
+            return;
+        }
+    
+        function toggleAttachmentRequired() {
+            const selectedId = leaveTypeSelect.value;
+            const requiresAttachment = attachmentRequirements[selectedId] === true;
+    
+            attachmentInput.required = requiresAttachment;
+    
+            if (attachmentRequired) {
+                attachmentRequired.style.display =
+                    requiresAttachment ? 'inline' : 'none';
+            }
+    
+            if (attachmentHelp) {
+                attachmentHelp.style.display =
+                    requiresAttachment ? 'block' : 'none';
+            }
+        }
+    
+        toggleAttachmentRequired();
+    
+        leaveTypeSelect.addEventListener(
+            'change',
+            toggleAttachmentRequired
+        );
+    });
+    </script>
+        </t>
   </template>
 
 

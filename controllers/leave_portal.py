@@ -58,7 +58,10 @@ class LeavePortal(http.Controller):
                         'leaves_taken': 0,
                         'virtual_remaining_leaves': 0,
                     }
-    
+        leave_types_attachment = {
+            lt.id: lt.requires_attachment
+            for lt in leave_types
+        }
         # Valores del formulario (con fallback)
         selected_type_id = kw.get('holiday_status_id')
         if not selected_type_id and leave_types:
@@ -88,6 +91,8 @@ class LeavePortal(http.Controller):
             'balances_json': json.dumps(balances),
             'leave_types_shift': leave_types_shift,
             'leave_types_shift_json': json.dumps(leave_types_shift),
+            'leave_types_attachment': leave_types_attachment,
+            'leave_types_attachment_json': json.dumps(leave_types_attachment),
             'error': kw.get('error'),
             
         })
@@ -114,7 +119,19 @@ class LeavePortal(http.Controller):
                 
                 shift_start = self._time_to_float(post.get('shift_start'))
                 shift_end = self._time_to_float(post.get('shift_end'))
+                holiday_status_id = int(post['holiday_status_id'])
                 
+                leave_type = request.env['hr.leave.type'].sudo().browse(
+                    holiday_status_id
+                )
+                
+                file = request.httprequest.files.get('attachment_ids')
+                
+                if leave_type.requires_attachment:
+                    if not file or not file.filename:
+                        raise ValidationError(
+                            "El tipo de permiso seleccionado requiere adjuntar un justificante."
+                        )
                 vals = {
                     'employee_id': employee.id,
                     'replacement': int(post.get('replacement', 0)) if post.get('replacement', 0) else False,

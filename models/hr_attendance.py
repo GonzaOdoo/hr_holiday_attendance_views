@@ -541,14 +541,20 @@ class HrContract(models.Model):
             if not att.check_in or not att.check_out or not att.employee_id:
                 fallback_atts |= att
                 continue
-    
+            employee = att.employee_id
+            calendar = employee.resource_calendar_id
+            if calendar and calendar.flexible_hours:
+                att.overtime_day = 0.0
+                att.overtime_night = 0.0
+                att.overtime_hours = 0.0
+                continue
+            
             # ✅ usar horario ya calculado
             if not att.scheduled_check_in or not att.scheduled_check_out:
                 fallback_atts |= att
                 continue
     
-            employee = att.employee_id
-            calendar = employee.resource_calendar_id
+            # Si el horario es flexible, no hay horas extra
     
             tz = pytz.timezone(calendar.tz or 'UTC') if calendar else pytz.UTC
     
@@ -625,9 +631,10 @@ class HrContract(models.Model):
                         att.overtime_night -= late_hours
                     else:
                         att.overtime_night = 0.0
-    
+            _logger.info(att.overtime_hours)
             att.overtime_hours = att.overtime_day + att.overtime_night
-    
+            if att.overtime_status == 'to_approve':
+                att.validated_overtime_hours = att.overtime_hours
         # =========================
         # 🔁 FALLBACK A ODOO
         # =========================

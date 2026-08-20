@@ -124,3 +124,7 @@ class HrLeaveType(models.Model):
     _inherit = 'hr.leave.type'
 
     shift_change = fields.Boolean('Cambio de horario')
+    requires_attachment = fields.Boolean(
+        string='Requiere adjunto',
+        default=False,
+    )
