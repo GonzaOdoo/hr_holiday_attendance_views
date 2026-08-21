@@ -219,7 +219,9 @@ class HrContract(models.Model):
         for work_entry_type_id, hours in work_hours.items():
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
             if work_entry_type.is_leave:
-                if work_entry_type.code != 'LEAVE90':
+                _logger.info("Ausencias en tiempo personal(justificadas)")
+                if work_entry_type.is_unforeseen:
+                    _logger.info("Restar tiempo personal!")
                     days = round(hours / hours_per_day, 5) if hours_per_day else 0
                     day_rounded = self._round_days(work_entry_type, days)
                     leave_days += day_rounded
@@ -265,7 +267,7 @@ class HrContract(models.Model):
     
             if work_entry_type.code == 'WORK100':
                     # Nómina normal: 30 días base, menos días fuera de contrato, menos ausencias
-                    effective_base = max_workable_days - liquidated_days
+                    effective_base = max_workable_days - liquidated_days - leave_days
                     day_rounded = max(0, round(effective_base, 5))
                     day_rounded = self._round_days(work_entry_type, day_rounded)
             if work_entry_type.code in ['OVERTIME_EVENING', 'OVERTIME_NIGHT', 'OVERTIME']:
@@ -314,6 +316,7 @@ class HrContract(models.Model):
                 })
         # Ordenar y retornar
         work_entry_type = self.env['hr.work.entry.type']
+        _logger.info("Return worked days!")
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
 
     def _count_work_days(self,employee, date_from, date_to):
