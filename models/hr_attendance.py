@@ -525,7 +525,6 @@ class HrContract(models.Model):
     def _compute_overtime_hours(self):
         if self.env.context.get('skip_overtime_compute'):
             return
-    
         atts = self.filtered(lambda r: r._name == 'hr.attendance')
         fallback_atts = self.env['hr.attendance']
     
@@ -644,6 +643,8 @@ class HrContract(models.Model):
             for att in fallback_atts:
                 if att.overtime_hours < 0:
                     att.overtime_hours = 0.0
+                if att.overtime_status == 'to_approve':
+                    att.validated_overtime_hours = att.overtime_hours
 
     def _normalize_interval(self, interval):
         """
