@@ -163,7 +163,7 @@ class HrLeave(models.Model):
                         compute_leaves=True,
                     )
     
-                    if daily_hours > 0:
+                    if daily_hours > 0 or leave.holiday_status_id.count_non_working_days:
                         work_days += 1
     
                     current_day += timedelta(days=1)
@@ -226,3 +226,9 @@ class HrLeave(models.Model):
                 'default_date_to':self.date_to,
             }
         }
+
+    def _get_leaves_on_public_holiday(self):
+        leaves = super()._get_leaves_on_public_holiday()
+        return leaves.filtered(
+            lambda leave: not leave.holiday_status_id.count_non_working_days
+        )

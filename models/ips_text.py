@@ -168,7 +168,9 @@ class HrContract(models.Model):
                 days = round(hours / hours_per_day, 5) if hours_per_day else 0
                 day_rounded = self._round_days(work_entry_type, days)
                 leave_days += day_rounded  # Sumar los días de ausencia
-        
+                _logger.info("Leave days")
+                if work_entry_type.is_unforeseen:
+                    _logger.info(leave_days)
         for work_entry_type_id, hours in work_hours_ordered:
             work_entry_type = self.env['hr.work.entry.type'].browse(work_entry_type_id)
             days = round(hours / hours_per_day, 5) if hours_per_day else 0

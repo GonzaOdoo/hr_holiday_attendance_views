@@ -230,12 +230,17 @@ class HrContract(models.Model):
             if not att.employee_id or not att.check_in:
                 continue
     
+            check_in_date = fields.Datetime.context_timestamp(
+                att,
+                att.check_in
+            ).date()
+    
             leave = self.env['hr.leave'].search([
                 ('employee_id', '=', att.employee_id.id),
                 ('holiday_status_id.shift_change', '=', True),
                 ('state', 'not in', ['validate', 'refuse']),
-                ('date_from', '<=', att.check_in),
-                ('date_to', '>=', att.check_in),
+                ('request_date_from', '<=', check_in_date),
+                ('request_date_to', '>=', check_in_date),
             ], limit=1)
     
             if leave:

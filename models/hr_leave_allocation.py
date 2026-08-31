@@ -128,3 +128,7 @@ class HrLeaveType(models.Model):
         string='Requiere adjunto',
         default=False,
     )
+    count_non_working_days = fields.Boolean(
+        string="Contar días no laborables",
+        help="Permite que las solicitudes de este tipo cuenten días aunque no estén incluidos en el calendario laboral."
+    )
