@@ -744,11 +744,99 @@ class HrContract(models.Model):
         # 🔁 FALLBACK A ODOO
         # =========================
         if fallback_atts:
+            # Primero dejamos que Odoo calcule las horas extra.
             super(HrContract, fallback_atts)._compute_overtime_hours()
-    
+
             for att in fallback_atts:
+                # Inicializar siempre nuestros campos
+                att.overtime_day = 0.0
+                att.overtime_night = 0.0
+
+                overtime_hours = max(att.overtime_hours or 0.0, 0.0)
+
+                if not overtime_hours:
+                    if att.overtime_status == 'to_approve':
+                        att.validated_overtime_hours = 0.0
+                    continue
+
+                # --------------------------------------------------
+                # Las horas extra del fallback se consideran al final
+                # de la asistencia.
+                #
+                # Ejemplo:
+                #
+                # check_in  = 08:00
+                # check_out = 20:30
+                # overtime = 12.50
+                #
+                # => overtime_start = 08:00
+                # => overtime_end   = 20:30
+                #
+                # --------------------------------------------------
+
+                if att.check_in and att.check_out:
+
+                    # Horas efectivamente trabajadas
+                    worked_hours = max(
+                        (att.check_out - att.check_in).total_seconds()
+                        / 3600.0,
+                        0.0
+                    )
+
+                    # Por seguridad, nunca permitir que las horas extra
+                    # sean mayores que toda la asistencia.
+                    overtime_hours = min(
+                        overtime_hours,
+                        worked_hours
+                    )
+
+                    employee = att.employee_id
+
+                    tz = pytz.timezone(
+                        employee.tz or 'America/Asuncion'
+                    )
+
+                    check_in = pytz.utc.localize(
+                        att.check_in
+                    ).astimezone(tz)
+
+                    check_out = pytz.utc.localize(
+                        att.check_out
+                    ).astimezone(tz)
+
+                    # Asumimos que las horas extra son las últimas
+                    # horas de la asistencia.
+                    overtime_start = (
+                        check_out
+                        - timedelta(hours=overtime_hours)
+                    )
+
+                    overtime_end = check_out
+
+                    if overtime_start < overtime_end:
+                        day_hours, night_hours = (
+                            self._split_interval_day_night(
+                                overtime_start,
+                                overtime_end
+                            )
+                        )
+
+                        att.overtime_day = round(day_hours, 2)
+                        att.overtime_night = round(night_hours, 2)
+
+                # --------------------------------------------------
+                # Mantener consistencia
+                # --------------------------------------------------
+
+                att.overtime_hours = (
+                    (att.overtime_day or 0.0)
+                    +
+                    (att.overtime_night or 0.0)
+                )
+
                 if att.overtime_hours < 0:
                     att.overtime_hours = 0.0
+
                 if att.overtime_status == 'to_approve':
                     att.validated_overtime_hours = att.overtime_hours
 
