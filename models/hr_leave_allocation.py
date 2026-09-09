@@ -132,3 +132,7 @@ class HrLeaveType(models.Model):
         string="Contar días no laborables",
         help="Permite que las solicitudes de este tipo cuenten días aunque no estén incluidos en el calendario laboral."
     )
+    is_overtime = fields.Boolean(
+        string='Es solicitud de horas extra',
+        default=False,
+    )

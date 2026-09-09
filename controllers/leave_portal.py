@@ -62,11 +62,21 @@ class LeavePortal(http.Controller):
             lt.id: lt.requires_attachment
             for lt in leave_types
         }
+        leave_types_unit = {
+            lt.id: lt.request_unit
+            for lt in leave_types
+        }
         # Valores del formulario (con fallback)
         selected_type_id = kw.get('holiday_status_id')
+
+        if not selected_type_id and leave_types:
+            selected_type_id = leave_types[0].id
+        
+        selected_leave_type = request.env['hr.leave.type'].sudo().browse(
+            int(selected_type_id)
+        ) if selected_type_id else request.env['hr.leave.type']
         if not selected_type_id and leave_types:
             selected_type_id = leave_types[0].id  # seleccionar el primero por defecto
-        
         leave_vals = {
             'employee_id': employee.id,
             'request_date_from': kw.get('request_date_from') or fields.Date.today(),
@@ -75,13 +85,22 @@ class LeavePortal(http.Controller):
             'replacement': int(kw.get('replacement') or 0) or False,
             'name': kw.get('name', ''),
             'tipo_enfermedad': kw.get('tipo_enfermedad', ''),
-            'request_unit_hours': kw.get('request_unit_hours') == 'Yes',
-            'request_hour_from': float(kw.get('request_hour_from') or 0.0),
-            'request_hour_to': float(kw.get('request_hour_to') or 0.0),
+            'request_unit_hours': (
+                selected_leave_type.request_unit == 'hour'
+            ),
+        
+            'request_hour_from': self._time_to_float(
+                kw.get('request_hour_from')
+            ) if selected_leave_type.request_unit == 'hour' else 0.0,
+        
+            'request_hour_to': self._time_to_float(
+                kw.get('request_hour_to')
+            ) if selected_leave_type.request_unit == 'hour' else 0.0,
             #'shift_start': float(kw.get('shift_start') or 0.0),
             #'shift_end': float(kw.get('shift_end') or 0.0),
         }
         _logger.info(leave_vals)
+        _logger.info(kw.get('request_unit_hours'))
         leave = request.env['hr.leave'].sudo().new(leave_vals)
         return request.render('hr_holiday_attendance_views.leave_form_custom', {
             'leave': leave,
@@ -93,6 +112,8 @@ class LeavePortal(http.Controller):
             'leave_types_shift_json': json.dumps(leave_types_shift),
             'leave_types_attachment': leave_types_attachment,
             'leave_types_attachment_json': json.dumps(leave_types_attachment),
+            'leave_types_unit': leave_types_unit,
+            'leave_types_unit_json': json.dumps(leave_types_unit),
             'error': kw.get('error'),
             
         })
@@ -116,7 +137,6 @@ class LeavePortal(http.Controller):
             with request.env.cr.savepoint():
                 date_from = fields.Date.from_string(post['request_date_from'])
                 date_to = fields.Date.from_string(post['request_date_to'])
-                
                 shift_start = self._time_to_float(post.get('shift_start'))
                 shift_end = self._time_to_float(post.get('shift_end'))
                 holiday_status_id = int(post['holiday_status_id'])
@@ -132,20 +152,48 @@ class LeavePortal(http.Controller):
                         raise ValidationError(
                             "El tipo de permiso seleccionado requiere adjuntar un justificante."
                         )
+                holiday_status_id = int(post['holiday_status_id'])
+
+                leave_type = request.env['hr.leave.type'].sudo().browse(
+                    holiday_status_id
+                )
+                
+                is_hour_unit = leave_type.request_unit == 'hour'
+
+                hour_from = 0.0
+                hour_to = 0.0
+                
+                if is_hour_unit:
+                    hour_from = self._time_to_float(
+                        post.get('request_hour_from')
+                    )
+                    hour_to = self._time_to_float(
+                        post.get('request_hour_to')
+                    )
+                
                 vals = {
                     'employee_id': employee.id,
-                    'replacement': int(post.get('replacement', 0)) if post.get('replacement', 0) else False,
-                    'holiday_status_id': int(post['holiday_status_id']),
+                    'replacement': (
+                        int(post.get('replacement', 0))
+                        if post.get('replacement')
+                        else False
+                    ),
+                    'holiday_status_id': holiday_status_id,
                     'name': post.get('name', ''),
                     'request_date_from': date_from,
                     'request_date_to': date_to,
+                    'request_unit_hours': is_hour_unit,
                     'reason_text': post.get('name', ''),
                     'tipo_enfermedad': post.get('tipo_enfermedad', ''),
                     'shift_start': shift_start,
                     'shift_end': shift_end,
-                    
                 }
                 
+                if is_hour_unit:
+                    vals.update({
+                        'request_hour_from': hour_from,
+                        'request_hour_to': hour_to,
+                    })
                 # Crear la solicitud
                 _logger.info(f"Creando leave con vals: {vals}")
                 _logger.info(f"date_from calculado: {vals.get('date_from')}")

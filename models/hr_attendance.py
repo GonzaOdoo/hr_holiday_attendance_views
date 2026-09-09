@@ -59,7 +59,7 @@ class HrContract(models.Model):
         store=True,
         tracking=True
     )
-
+    
     scheduled_check_in = fields.Datetime(string='Hora programada de entrada', compute='_compute_scheduled_attendance_times', store=True)
     scheduled_check_out = fields.Datetime(
         string='Hora programada de salida', 
@@ -92,23 +92,23 @@ class HrContract(models.Model):
         store=True
     )
     currency_id = fields.Many2one('res.currency', default=lambda self: self.env.company.currency_id, readonly=True)
-    overtime_day_amount = fields.Monetary(string="Monto HED",compute='_compute_overtime_amount' ,store=False)
-    overtime_night_amount = fields.Monetary(string="Monto HEN",compute='_compute_overtime_amount', store=False)
+    overtime_day_amount = fields.Monetary(string="Monto HED",compute='_compute_overtime_amount' ,store=True)
+    overtime_night_amount = fields.Monetary(string="Monto HEN",compute='_compute_overtime_amount', store=True)
     night_hours_amount = fields.Monetary(
         string="Monto recargo nocturno",
         compute='_compute_overtime_amount',
-        store=False
+        store=True
     )
     total_overtime_amount = fields.Monetary(
         string="Total horas extra",
         compute='_compute_overtime_amount',
-        store=False
+        store=True
     )
     
     total_with_night_amount = fields.Monetary(
         string="Total con recargo nocturno",
         compute='_compute_overtime_amount',
-        store=False
+        store=True
     )
 
     out_of_schedule = fields.Boolean(
@@ -117,6 +117,48 @@ class HrContract(models.Model):
         store=True,
         index=True,
     )
+
+    overtime_leave_ids = fields.One2many(
+        'hr.leave',
+        'attendance_id',
+        string='Solicitudes de horas extra',
+    )
+    overtime_from_leave = fields.Boolean(
+        string="Horas extra desde solicitud",
+        default=False,
+        index=True,
+    )
+    overtime_has_requests = fields.Boolean(
+        string="Tiene solicitudes de HE",
+        compute="_compute_overtime_request_info",
+    )
+    
+    overtime_pending_requests = fields.Integer(
+        string="Solicitudes pendientes",
+        compute="_compute_overtime_request_info",
+    )
+    
+    overtime_approved_requests = fields.Integer(
+        string="Solicitudes aprobadas",
+        compute="_compute_overtime_request_info",
+    )
+
+    @api.depends('overtime_leave_ids', 'overtime_leave_ids.state')
+    def _compute_overtime_request_info(self):
+        for attendance in self:
+            requests = attendance.overtime_leave_ids
+    
+            pending = requests.filtered(
+                lambda l: l.state in ('confirm', 'validate1')
+            )
+    
+            approved = requests.filtered(
+                lambda l: l.state == 'validate'
+            )
+    
+            attendance.overtime_has_requests = bool(requests)
+            attendance.overtime_pending_requests = len(pending)
+            attendance.overtime_approved_requests = len(approved)
 
     @api.depends(
         "check_in",
@@ -182,9 +224,8 @@ class HrContract(models.Model):
             att.total_overtime_amount = day_amount + night_ot_amount
             att.total_with_night_amount = att.total_overtime_amount + night_extra_amount
 
-    @api.depends('check_in', 'check_out')
+    @api.depends('check_in', 'check_out', )
     def _compute_night_hours(self):
-    
         def overlap(start1, end1, start2, end2):
             start = max(start1, start2)
             end = min(end1, end2)
@@ -199,24 +240,55 @@ class HrContract(models.Model):
             tz_name = att.employee_id.tz or 'America/Asuncion'
             tz = pytz.timezone(tz_name)
     
-            check_in = fields.Datetime.to_datetime(att.check_in).astimezone(tz)
-            check_out = fields.Datetime.to_datetime(att.check_out).astimezone(tz)
+            check_in = fields.Datetime.to_datetime(
+                att.check_in
+            ).astimezone(tz)
     
+            check_out = fields.Datetime.to_datetime(
+                att.check_out
+            ).astimezone(tz)
+    
+            # Si el empleado hace guardia y el turno involucra
+            # dos días distintos, no corresponde recargo nocturno.
+            if (
+                att.employee_id.does_guard
+                and check_in.date() != check_out.date()
+            ):
+                continue
+            
             total_seconds = 0
     
             day = check_in.date()
             last_day = check_out.date()
-    
             while day <= last_day:
     
-                night1_start = tz.localize(datetime.combine(day, time(0, 0)))
-                night1_end = tz.localize(datetime.combine(day, time(6, 0)))
+                night1_start = tz.localize(
+                    datetime.combine(day, time(0, 0))
+                )
+                night1_end = tz.localize(
+                    datetime.combine(day, time(6, 0))
+                )
     
-                night2_start = tz.localize(datetime.combine(day, time(20, 0)))
-                night2_end = tz.localize(datetime.combine(day, time(23, 59, 59)))
+                night2_start = tz.localize(
+                    datetime.combine(day, time(20, 0))
+                )
+                night2_end = tz.localize(
+                    datetime.combine(day, time(23, 59, 59))
+                )
     
-                total_seconds += overlap(check_in, check_out, night1_start, night1_end)
-                total_seconds += overlap(check_in, check_out, night2_start, night2_end)
+                total_seconds += overlap(
+                    check_in,
+                    check_out,
+                    night1_start,
+                    night1_end
+                )
+    
+                total_seconds += overlap(
+                    check_in,
+                    check_out,
+                    night2_start,
+                    night2_end
+                )
     
                 day += timedelta(days=1)
     
@@ -301,11 +373,38 @@ class HrContract(models.Model):
     
             # ✅ Elegir calendario correcto
             calendar = shift_change.calendar_id if shift_change else contract.resource_calendar_id
-    
+            _logger.info(calendar)
             if not calendar:
                 attendance.scheduled_check_in = False
                 attendance.scheduled_check_out = False
                 continue
+            # ============================================================
+            # Verificar si el día es feriado / no laborable
+            # ============================================================
+            
+            holiday_day_end = day_start + timedelta(days=1)
+
+            ResourceCalendarLeave = self.env['resource.calendar.leaves']
+            
+            is_holiday = ResourceCalendarLeave.search_count([
+                ('resource_id', '=', False),
+                ('date_from', '<', holiday_day_end.astimezone(UTC)),
+                ('date_to', '>', day_start.astimezone(UTC)),
+            ])
+            _logger.info("Feriados!!")
+            _logger.info(is_holiday)
+            if is_holiday:
+                _logger.info(
+                    "Attendance %s: %s es feriado para el calendario %s",
+                    attendance.id,
+                    check_date,
+                    calendar.display_name,
+                )
+            
+                attendance.scheduled_check_in = False
+                attendance.scheduled_check_out = False
+                continue
+
     
             # Obtener intervalos del calendario elegido
             intervals = calendar._attendance_intervals_batch(
@@ -313,7 +412,7 @@ class HrContract(models.Model):
                 day_end.astimezone(UTC),
                 employee.resource_id
             ).get(employee.resource_id.id, [])
-    
+            _logger.info(intervals)
             candidates = []
     
             for interval in sorted(intervals, key=lambda x: x[0]):
@@ -325,7 +424,6 @@ class HrContract(models.Model):
                     and start_local.hour < 4
                 ):
                     continue
-    
                 candidates.append(interval)
     
             if not candidates:
@@ -541,7 +639,15 @@ class HrContract(models.Model):
                 att.check_in
             )
             att.overtime_hours = 0.0
-    
+            if att.overtime_from_leave:
+                att.overtime_hours = (
+                    (att.overtime_day or 0.0) +
+                    (att.overtime_night or 0.0)
+                )
+        
+                if att.overtime_status == 'to_approve':
+                    att.validated_overtime_hours = att.overtime_hours
+                continue
             if not att.check_in or not att.check_out or not att.employee_id:
                 fallback_atts |= att
                 continue
@@ -552,14 +658,14 @@ class HrContract(models.Model):
                 att.overtime_night = 0.0
                 att.overtime_hours = 0.0
                 continue
-            
+            _logger.info(calendar)
             # ✅ usar horario ya calculado
             if not att.scheduled_check_in or not att.scheduled_check_out:
                 fallback_atts |= att
                 continue
     
             # Si el horario es flexible, no hay horas extra
-    
+            _logger.info("Calculando")
             tz = pytz.timezone(calendar.tz or 'UTC') if calendar else pytz.UTC
     
             check_in = pytz.utc.localize(att.check_in).astimezone(tz)
@@ -574,20 +680,15 @@ class HrContract(models.Model):
             if diff_hours > 6:
                 fallback_atts |= att
                 continue
-    
-            # =========================
-            # ✅ TU LÓGICA CUSTOM
-            # =========================
-    
             grace_hours = 0.5
     
             extra_before = 0.0
             extra_after = 0.0
     
             # Entrada anticipada
-            entry_diff = (sched_in - check_in).total_seconds() / 3600.0
-            if entry_diff > grace_hours:
-                extra_before = entry_diff
+            #entry_diff = (sched_in - check_in).total_seconds() / 3600.0
+            #if entry_diff > grace_hours:
+            #    extra_before = entry_diff
     
             # Salida tardía
             exit_diff = (check_out - sched_out).total_seconds() / 3600.0
@@ -597,13 +698,13 @@ class HrContract(models.Model):
             night_hours = 0.0
 
             # 🔹 Intervalo antes del turno
-            if extra_before > 0:
-                before_start = check_in
-                before_end = sched_in
-            
-                d, n = self._split_interval_day_night(before_start, before_end)
-                day_hours += d
-                night_hours += n
+            #if extra_before > 0:
+            #    before_start = check_in
+            #    before_end = sched_in
+            #
+            #    d, n = self._split_interval_day_night(before_start, before_end)
+            #    day_hours += d
+            #    night_hours += n
             
             # 🔹 Intervalo después del turno
             if extra_after > 0:
@@ -709,3 +810,32 @@ class HrContract(models.Model):
                 attendance.worked_hours = attendance._get_worked_hours_in_range(attendance.check_in, attendance.check_out)
             else:
                 attendance.worked_hours = False
+
+
+    def action_view_overtime_requests(self):
+        self.ensure_one()
+    
+        requests = self.overtime_leave_ids
+    
+        if len(requests) == 1:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Solicitud de horas extra',
+                'res_model': 'hr.leave',
+                'view_mode': 'form',
+                'res_id': requests.id,
+                'target': 'current',
+            }
+    
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Solicitudes de horas extra',
+            'res_model': 'hr.leave',
+            'view_mode': 'list,form',
+            'domain': [
+                ('attendance_id', '=', self.id),
+            ],
+            'context': {
+                'default_attendance_id': self.id,
+            },
+        }

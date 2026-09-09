@@ -21,188 +21,382 @@ class HrContract(models.Model):
 
     def _preprocess_work_hours_data(self, work_data, date_from, date_to):
         """
-        Extiende el método para soportar:
-        - Horas extra diurnas/nocturnas (OVERTIME_EVENING / OVERTIME_NIGHT)
-        - Guardias diurnas/nocturnas (GUARD_EVENING / GUARD_NIGHT)
-        Las guardias se marcan con `is_guard = True` en hr.attendance y se ignoran en horas extra.
+        Extiende el cálculo de horas de trabajo para nómina.
+    
+        Procesa:
+            - Horas extra diurnas: OVERTIME_EVENING
+            - Horas extra nocturnas: OVERTIME_NIGHT
+            - Guardias diurnas: GUARD_EVENING
+            - Guardias nocturnas: GUARD_NIGHT
+            - Retrasos confirmados: LATE
+            - Recargo nocturno: RECARGON
+    
+        Las horas extra se toman directamente de:
+            hr.attendance.overtime_day
+            hr.attendance.overtime_night
+    
+        Solamente se consideran horas extra con:
+            overtime_status == 'approved'
+    
+        Las guardias se identifican mediante:
+            is_guard == True
+    
+        Las guardias no se consideran horas extra.
         """
-        # Filtrar contratos relevantes
+    
+        # ============================================================
+        # 1. CONTRATOS RELEVANTES
+        # ============================================================
+    
         attendance_contracts = self.filtered(
             lambda c: c.work_entry_source == 'attendance'
         )
+    
         if not attendance_contracts:
             return
-
-        # Tipo de entrada por defecto (horas normales)
+    
+        # Tipo de entrada normal
         default_work_entry_type = self.structure_type_id.default_work_entry_type_id
+    
         if len(default_work_entry_type) != 1:
             return
-
-        # === Tipos de entrada para HORAS EXTRA ===
-        overtime_normal_type = self.env['hr.work.entry.type'].search([('code', '=', 'OVERTIME')], limit=1)
-        overtime_day_type = self.env['hr.work.entry.type'].search([('code', '=', 'OVERTIME_EVENING')], limit=1)
-        overtime_night_type = self.env['hr.work.entry.type'].search([('code', '=', 'OVERTIME_NIGHT')], limit=1)
-
-        # === Tipos de entrada para GUARDIAS ===
-        guard_day_type = self.env['hr.work.entry.type'].search([('code', '=', 'GUARD_EVENING')], limit=1)
-        guard_night_type = self.env['hr.work.entry.type'].search([('code', '=', 'GUARD_NIGHT')], limit=1)
-
-        # Validar que existan los tipos necesarios
+    
+        # ============================================================
+        # 2. TIPOS DE WORK ENTRY
+        # ============================================================
+    
+        WorkEntryType = self.env['hr.work.entry.type']
+    
+        overtime_day_type = WorkEntryType.search(
+            [('code', '=', 'OVERTIME_EVENING')],
+            limit=1
+        )
+    
+        overtime_night_type = WorkEntryType.search(
+            [('code', '=', 'OVERTIME_NIGHT')],
+            limit=1
+        )
+    
+        guard_day_type = WorkEntryType.search(
+            [('code', '=', 'GUARD_EVENING')],
+            limit=1
+        )
+    
+        guard_night_type = WorkEntryType.search(
+            [('code', '=', 'GUARD_NIGHT')],
+            limit=1
+        )
+    
+        late_type = WorkEntryType.search(
+            [('code', '=', 'LATE')],
+            limit=1
+        )
+    
+        recargo_nocturno_type = WorkEntryType.search(
+            [('code', '=', 'RECARGON')],
+            limit=1
+        )
+    
+        # ============================================================
+        # 3. ADVERTENCIAS
+        # ============================================================
+    
         if not overtime_day_type or not overtime_night_type:
-            _logger.warning("No se encontraron work entry types para OVERTIME_EVENING o OVERTIME_NIGHT")
+            _logger.warning(
+                "No se encontraron los work entry types "
+                "OVERTIME_EVENING / OVERTIME_NIGHT"
+            )
+    
         if not guard_day_type or not guard_night_type:
-            _logger.warning("No se encontraron work entry types para GUARD_EVENING o GUARD_NIGHT")
-            # Puedes return si las guardias son obligatorias
-            # return
-
-        # Rangos horarios
-        NIGHT_START = 20  # 10 PM
-        NIGHT_END = 6     # 6 AM
-
-        # === Buscar asistencias en el rango ===
+            _logger.warning(
+                "No se encontraron los work entry types "
+                "GUARD_EVENING / GUARD_NIGHT"
+            )
+    
+        if not late_type:
+            _logger.warning(
+                "No se encontró work entry type con código 'LATE'"
+            )
+    
+        if not recargo_nocturno_type:
+            _logger.warning(
+                "No se encontró work entry type con código 'RECARGON'"
+            )
+    
+        # ============================================================
+        # 4. BUSCAR ASISTENCIAS
+        # ============================================================
+    
         attendances = self.env['hr.attendance'].sudo().search([
             ('employee_id', 'in', self.employee_id.ids),
             ('check_in_date', '>=', date_from.date()),
             ('check_in_date', '<=', date_to.date()),
         ])
-        _logger.info("Asistencias encontradas: %s", len(attendances))
-        for attendance in attendances:
-            _logger.info(f"{attendance.check_in}-{attendance.check_out}, Nocturno:{attendance.night_hours}")
-        # Acumuladores
+    
+        _logger.info(
+            "Asistencias encontradas para nómina: %s",
+            len(attendances)
+        )
+    
+        # ============================================================
+        # 5. ACUMULADORES
+        # ============================================================
+    
         total_overtime = 0.0
-        total_guards = 0.0
-
+    
         overtime_day_hours = 0.0
         overtime_night_hours = 0.0
-
+    
+        total_guards = 0.0
+    
         guard_day_hours = 0.0
         guard_night_hours = 0.0
-
+    
+        # ============================================================
+        # 6. PROCESAR ASISTENCIAS
+        # ============================================================
+    
         for att in attendances:
-            # === CASO 1: Es una GUARDIA ===
+    
+            _logger.info(
+                "Asistencia %s - %s / %s | Guardia=%s | "
+                "Estado HE=%s | HED=%.2f | HEN=%.2f",
+                att.employee_id.name,
+                att.check_in,
+                att.check_out,
+                att.is_guard,
+                att.overtime_status,
+                att.overtime_day or 0.0,
+                att.overtime_night or 0.0,
+            )
+    
+            # --------------------------------------------------------
+            # CASO 1: GUARDIA
+            # --------------------------------------------------------
+    
             if att.is_guard:
-                # Usar las horas totales trabajadas (no solo overtime)
-                hours = att.worked_hours
+    
+                hours = att.worked_hours or 0.0
+    
                 if hours <= 0:
                     continue
-
-                hour_in = att.check_in.hour
+    
+                # Para mantener la lógica actual:
+                # la guardia completa se clasifica según la hora
+                # de entrada.
+    
+                hour_in = att.check_in.hour if att.check_in else 0
+    
+                NIGHT_START = 20
+                NIGHT_END = 6
+    
                 if hour_in >= NIGHT_START or hour_in < NIGHT_END:
                     guard_night_hours += hours
                 else:
                     guard_day_hours += hours
+    
                 total_guards += hours
-
-            # === CASO 2: Es HORA EXTRA (y NO es guardia) ===
-            elif not att.is_guard and att.validated_overtime_hours > 0 and att.overtime_status == 'approved':
-                # Calcular el rango de las horas extra (asumiendo que están al final)
-                overtime_end = att.check_out
-                overtime_start = overtime_end - timedelta(hours=att.validated_overtime_hours)
-                
-                # Calcular cuántas de esas horas extra son nocturnas (en hora local)
-                night_overtime = self._get_night_hours_between(
-                    overtime_start, 
-                    overtime_end, 
-                    night_start=NIGHT_START, 
-                    night_end=NIGHT_END,
-                    tz_name='America/Asuncion'
+    
+                continue
+    
+            # --------------------------------------------------------
+            # CASO 2: HORAS EXTRA
+            #
+            # IMPORTANTE:
+            # Solamente llevar a nómina las horas APROBADAS.
+            #
+            # Ya no recalculamos el intervalo ni las horas nocturnas.
+            # Usamos directamente los campos de hr.attendance.
+            # --------------------------------------------------------
+    
+            if att.overtime_status == 'approved':
+    
+                day_overtime = att.overtime_day or 0.0
+                night_overtime = att.overtime_night or 0.0
+    
+                if day_overtime > 0:
+                    overtime_day_hours += day_overtime
+    
+                if night_overtime > 0:
+                    overtime_night_hours += night_overtime
+    
+                total_overtime += (
+                    day_overtime +
+                    night_overtime
                 )
-                day_overtime = att.overtime_hours - night_overtime
-            
-                overtime_night_hours += night_overtime
-                overtime_day_hours += day_overtime
-                total_overtime += att.overtime_hours
-
-        # === 1. Aplicar HORAS EXTRA ===
-        if total_overtime > 0 and default_work_entry_type.id in work_data:
+    
+                _logger.info(
+                    "HE aprobadas - %s: HED=%.2f HEN=%.2f Total=%.2f",
+                    att.employee_id.name,
+                    day_overtime,
+                    night_overtime,
+                    day_overtime + night_overtime,
+                )
+    
+        # ============================================================
+        # 7. APLICAR HORAS EXTRA
+        # ============================================================
+    
+        _logger.info(
+            "Total horas extra aprobadas: %.2f",
+            total_overtime
+        )
+    
+        _logger.info(
+            "Horas extra diurnas aprobadas: %.2f",
+            overtime_day_hours
+        )
+    
+        _logger.info(
+            "Horas extra nocturnas aprobadas: %.2f",
+            overtime_night_hours
+        )
+    
+        # Restar las horas extra del trabajo normal
+        if (
+            total_overtime > 0
+            and default_work_entry_type.id in work_data
+        ):
             work_data[default_work_entry_type.id] -= total_overtime
-
+    
+        # HED
         if overtime_day_hours > 0 and overtime_day_type:
-            work_data[overtime_day_type.id] = work_data.get(overtime_day_type.id, 0) + overtime_day_hours
-
+            work_data[overtime_day_type.id] = (
+                work_data.get(overtime_day_type.id, 0.0)
+                + overtime_day_hours
+            )
+    
+        # HEN
         if overtime_night_hours > 0 and overtime_night_type:
-            work_data[overtime_night_type.id] = work_data.get(overtime_night_type.id, 0) + overtime_night_hours
-
-        # === 2. Aplicar GUARDIAS ===
-        if total_guards > 0 and default_work_entry_type.id in work_data:
-            # Restar también las guardias del tiempo normal (si se marcan como trabajo)
-            # Opcional: si las guardias NO deben restar de horas normales, comenta esta línea
+            work_data[overtime_night_type.id] = (
+                work_data.get(overtime_night_type.id, 0.0)
+                + overtime_night_hours
+            )
+    
+        # ============================================================
+        # 8. APLICAR GUARDIAS
+        # ============================================================
+    
+        _logger.info(
+            "Guardias - Diurnas: %.2f | Nocturnas: %.2f | Total: %.2f",
+            guard_day_hours,
+            guard_night_hours,
+            total_guards,
+        )
+    
+        # Restar guardias de las horas normales
+        if (
+            total_guards > 0
+            and default_work_entry_type.id in work_data
+        ):
             work_data[default_work_entry_type.id] -= total_guards
-
+    
+        # Guardia diurna
         if guard_day_hours > 0 and guard_day_type:
-            work_data[guard_day_type.id] = work_data.get(guard_day_type.id, 0) + guard_day_hours
-
+            work_data[guard_day_type.id] = (
+                work_data.get(guard_day_type.id, 0.0)
+                + guard_day_hours
+            )
+    
+        # Guardia nocturna
         if guard_night_hours > 0 and guard_night_type:
-            work_data[guard_night_type.id] = work_data.get(guard_night_type.id, 0) + guard_night_hours
-
-        # === 3. Aplicar RETRASOS CONFIRMADOS ===
-        late_type = self.env['hr.work.entry.type'].search([('code', '=', 'LATE')], limit=1)
+            work_data[guard_night_type.id] = (
+                work_data.get(guard_night_type.id, 0.0)
+                + guard_night_hours
+            )
+    
+        # ============================================================
+        # 9. RETRASOS CONFIRMADOS
+        # ============================================================
+    
         if late_type:
-            # Buscar asistencias con retraso confirmado > 0 en el rango
+    
             late_attendances = self.env['hr.attendance'].sudo().search([
                 ('employee_id', 'in', self.employee_id.ids),
                 ('check_in', '>=', date_from),
                 ('check_out', '<=', date_to),
                 ('confirmed_late_minutes', '>', 0),
             ])
-
-            total_late_minutes = sum(att.confirmed_late_minutes for att in late_attendances)
-            total_late_hours = total_late_minutes / 60.0  # convertir a horas
-
-            work_data[late_type.id] = work_data.get(late_type.id, 0) + total_late_hours
-            _logger.info("Retrasos confirmados procesados: %.2f horas", total_late_hours)
-                
-        else:
-            _logger.warning("No se encontró work entry type con código 'LATE_CONFIRMED' para retrasos confirmados.")
-        
-        recargo_nocturno_type = self.env['hr.work.entry.type'].search([('code', '=', 'RECARGON')], limit=1)
+    
+            total_late_minutes = sum(
+                att.confirmed_late_minutes
+                for att in late_attendances
+            )
+    
+            total_late_hours = total_late_minutes / 60.0
+    
+            if total_late_hours > 0:
+    
+                work_data[late_type.id] = (
+                    work_data.get(late_type.id, 0.0)
+                    + total_late_hours
+                )
+    
+                _logger.info(
+                    "Retrasos confirmados procesados: %.2f horas",
+                    total_late_hours
+                )
+    
+        # ============================================================
+        # 10. RECARGO NOCTURNO
+        # ============================================================
+    
         if recargo_nocturno_type:
-            _logger.info("Inicio cálculo recargo nocturno")
-        
+    
+            _logger.info(
+                "Inicio cálculo recargo nocturno"
+            )
+    
             total_recargo_nocturno = 0.0
-        
+    
             for att in attendances:
+    
                 if not att.check_in or not att.check_out:
                     continue
-        
-                total_att_hours = (att.check_out - att.check_in).total_seconds() / 3600
-        
+    
+                total_att_hours = (
+                    att.check_out - att.check_in
+                ).total_seconds() / 3600.0
+    
                 if total_att_hours <= 0:
                     continue
-        
+    
                 night_hours = att.night_hours or 0.0
-        
-                # === Ajuste si hay overtime no aprobado ===
-                #if att.validated_overtime_hours > 0 and att.overtime_status != 'approved':
-                #    overtime_duration = att.validated_overtime_hours
-                #    normal_hours = max(total_att_hours - overtime_duration, 0)
-                #    if normal_hours == 0:
-                #        continue
-                #    ratio = normal_hours / total_att_hours
-                #    night_hours *= ratio
-        
+    
                 total_recargo_nocturno += night_hours
-        
+    
             if total_recargo_nocturno > 0:
+    
                 work_data[recargo_nocturno_type.id] = (
-                    work_data.get(recargo_nocturno_type.id, 0)
+                    work_data.get(
+                        recargo_nocturno_type.id,
+                        0.0
+                    )
                     + total_recargo_nocturno
                 )
-        
+    
                 _logger.info(
                     "Recargo nocturno procesado: %.2f horas",
                     total_recargo_nocturno
                 )
-        else:
-            _logger.warning("No se encontró work entry type con código 'RECARGON' para recargo nocturno.")
-        # === Log final ===
+    
+        # ============================================================
+        # 11. LOG FINAL
+        # ============================================================
+    
         _logger.info(
-            "Horas procesadas - Extra Diurna: %.2f, Extra Nocturna: %.2f, "
-            "Guardia Diurna: %.2f, Guardia Nocturna: %.2f",
-            overtime_day_hours, overtime_night_hours, guard_day_hours, guard_night_hours
+            "Horas procesadas - "
+            "Extra Diurna: %.2f, "
+            "Extra Nocturna: %.2f, "
+            "Guardia Diurna: %.2f, "
+            "Guardia Nocturna: %.2f, "
+            "Recargo Nocturno: %.2f",
+            overtime_day_hours,
+            overtime_night_hours,
+            guard_day_hours,
+            guard_night_hours,
+            total_recargo_nocturno if recargo_nocturno_type else 0.0,
         )
-
-
 
     def _get_work_hours(self, date_from, date_to, domain=None):
         """
