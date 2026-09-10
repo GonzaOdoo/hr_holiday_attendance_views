@@ -152,13 +152,37 @@ class HrContract(models.Model):
                 for input_type_id, attachments in valid_attachments.grouped("other_input_type_id").items():
                     amount = attachments._get_active_amount()
                     name = ', '.join(attachments.mapped('description'))
+                    
                     input_line_vals.append(Command.create({
                         'name': name,
                         'amount': amount if not slip.credit_note else -amount,
                         'input_type_id': input_type_id.id,
+                        'guard_amount': sum(attachments.mapped('guard_amount')),
                     }))
+                    _logger.info(input_line_vals)
                 slip.update({'input_line_ids': input_line_vals})
+                _logger.info(
+                    "INPUTS GENERADOS: %s",
+                    [
+                        {
+                            'id': line.id,
+                            'name': line.name,
+                            'guard_amount': line.guard_amount,
+                            'input_type_id': line.input_type_id.id,
+                        }
+                        for line in slip.input_line_ids
+                        if line.input_type_id.id in attachment_type_ids
+                    ]
+                )
+                self.env.flush_all()
 
+                for line in slip.input_line_ids:
+                    _logger.info(
+                        "AFTER FLUSH -> ID=%s NAME=%s GUARD_AMOUNT=%s",
+                        line.id,
+                        line.name,
+                        line.guard_amount,
+                    )
     def get_absences(self,work_hours):
         _logger.info("Ausencias")
         _logger.info(work_hours)
@@ -1232,5 +1256,41 @@ class HrContract(models.Model):
                 return current_day
     
             current_day += timedelta(days=1)
+    
+        return False
+
+    def get_communication_date(self):
+        self.ensure_one()
+    
+        calendar = self.employee_id.resource_calendar_id
+        if not calendar:
+            return self.date_from - timedelta(days=15)
+    
+        tz = pytz.timezone(self.employee_id.tz or 'UTC')
+    
+        # Comenzamos 15 días antes de la fecha de inicio
+        current_day = self.date_from - timedelta(days=15)
+    
+        # Buscamos hacia atrás hasta 30 días por seguridad
+        for _i in range(30):
+    
+            day_start = tz.localize(
+                datetime.combine(current_day, datetime.min.time())
+            )
+    
+            day_end = tz.localize(
+                datetime.combine(current_day, datetime.max.time())
+            )
+    
+            daily_hours = calendar.get_work_hours_count(
+                start_dt=day_start,
+                end_dt=day_end,
+                compute_leaves=True,
+            )
+    
+            if daily_hours > 0:
+                return current_day
+    
+            current_day -= timedelta(days=1)
     
         return False

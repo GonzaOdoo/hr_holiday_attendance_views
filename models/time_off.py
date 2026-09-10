@@ -485,7 +485,8 @@ class HrLeave(models.Model):
 
     def action_validate(self,check_state=True):
         res = super().action_validate(check_state=True)
-        self._apply_overtime_to_attendance()
+        if self.holiday_status_id.is_overtime:
+            self._apply_overtime_to_attendance()
         for leave in self:
             # Solo si es cambio de horario
             if leave.holiday_status_id.shift_change:
@@ -571,6 +572,8 @@ class HrLeave(models.Model):
             night_hours = sum(leaves.mapped('night_hours'))
     
             total_overtime = overtime_day + overtime_night
+            if total_overtime < 0.5:
+                raise ValidationError("No se puede aprobar un permiso de horas extras con menos de 30 minutos")
     
             attendance.write({
                 'overtime_from_leave': True,

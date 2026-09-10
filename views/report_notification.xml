@@ -2,13 +2,14 @@
 
     <template id="report_holiday_notification">
 
+     
         
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="o">
 
                 <t t-call="web.basic_layout">
 
-                    <div class="page" style="padding: 60px 80px; font-size: 14px;">
+                    <div class="page" style="padding: 60px 60px; font-size: 14px;">
 
                         <!-- Logo -->
                         <div style="text-align:center; margin-bottom: 30px;">
@@ -16,14 +17,23 @@
                             <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)" style="max-height: 120px; max-width: 300px;"/>
 
                         </div>
-
+                        <div style="text-align: right;">
+                            Luque,
+                            <span t-esc="o.get_communication_date().day"/>
+                            de
+                            <span t-esc="{                                 1: 'Enero',                                 2: 'Febrero',                                 3: 'Marzo',                                 4: 'Abril',                                 5: 'Mayo',                                 6: 'Junio',                                 7: 'Julio',                                 8: 'Agosto',                                 9: 'Septiembre',                                 10: 'Octubre',                                 11: 'Noviembre',                                 12: 'Diciembre'                             }[o.get_communication_date().month]"/>
+                            de
+                            <span t-esc="o.get_communication_date().year"/>
+                        </div>
+                        <div>
                         <!-- Título -->
-                        <h2 style="text-align:center; margin-bottom:40px;">
+                        <h2 style="text-align:center; margin-bottom:40px;margin-top:40px">
                             COMUNICACIÓN DE VACACIONES
                         </h2>
-
+                        </div>
                         <p>
                             Sr./a.
+                            
                         </p>
 
                         <p>
@@ -53,7 +63,7 @@
                             correspondientes al período
 
                             <strong>
-                                <span t-esc="o.date_from.year"/>
+                                <span t-esc="o.date_from.year -1"/>-<span t-esc="o.date_from.year"/>
                             </strong>,
 
                             las podrá usufructuar a partir del día

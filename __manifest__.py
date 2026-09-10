@@ -8,7 +8,7 @@
     "author": 'GonzaOdoo',
     "maintainer": "GonzaOdoo",
     "website": 'https://www.yourcompany.com',
-    "depends": ['hr_holidays','hr_payroll_attendance'],
+    "depends": ['hr_holidays','hr_payroll_attendance','hr_payroll'],
     "data":['views/ips_views.xml',
             'views/report_wizard.xml',
             'views/report_templates.xml',

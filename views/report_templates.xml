@@ -2,7 +2,7 @@
 <odoo>
     <!-- Plantilla principal del informe -->
     <template id="report_payslip_two_per_page">
-                <t t-call="web.html_container">
+      <t t-call="web.html_container">
             <t t-call="web.basic_layout">
                 <style>
                     .page {
@@ -137,7 +137,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.total)"/>
+                                                                    <t t-esc="int(input.guard_amount)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -340,7 +340,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.total)"/>
+                                                                    <t t-esc="int(input.guard_amount)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -548,7 +548,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.total)"/>
+                                                                    <t t-esc="int(input.guard_amount)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
@@ -751,7 +751,7 @@
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
                                                                 <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                                    <t t-esc="int(input.total)"/>
+                                                                    <t t-esc="int(input.guard_amount)"/>
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>

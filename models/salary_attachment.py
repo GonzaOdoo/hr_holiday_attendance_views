@@ -6,6 +6,8 @@ _logger = logging.getLogger(__name__)
 class HrSalaryAttachment(models.Model):
     _inherit = 'hr.salary.attachment'
 
+    guard_amount = fields.Integer(string="Cantidad de guardias")
+    
     @api.depends("payslip_ids.state")
     def _compute_has_done_payslip(self):
         for record in self:
@@ -13,4 +15,7 @@ class HrSalaryAttachment(models.Model):
             record.has_done_payslip = has_done
             if has_done and record.state not in ('close', 'cancel'):
                 record.state = 'close'
-            
+
+class HrPayslipType(models.Model):
+    _inherit = 'hr.payslip.input'
+    guard_amount = fields.Integer(string="Cantidad de guardias")

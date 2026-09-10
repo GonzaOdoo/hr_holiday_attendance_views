@@ -2,7 +2,7 @@
 <odoo>
     <!-- Plantilla principal del informe -->
     <template id="report_payslip_two_per_page_holiday">
-          <t t-call="web.html_container">
+           <t t-call="web.html_container">
             <t t-call="web.basic_layout">
                 <style>
                     .page {
@@ -93,16 +93,16 @@
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
+                                                <t t-foreach="first.line_ids" t-as="day">
+                                                    <t t-if="day.code == 'VACACIONES'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="int(day.number_of_days)"/> Dias
+                                                            <t t-esc="int(day.quantity)"/> Dias
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.amount)"/>
+                                                            <t t-esc="first.format_amount(day.total)"/>
                                                         </td>
                                                         
                                                         
@@ -117,7 +117,7 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'VACACIONES').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -252,16 +252,16 @@
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
+                                                <t t-foreach="first.line_ids" t-as="day">
+                                                    <t t-if="day.code == 'VACACIONES'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="int(day.number_of_days)"/> Dias
+                                                            <t t-esc="int(day.quantity)"/> Dias
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.amount)"/>
+                                                            <t t-esc="first.format_amount(day.total)"/>
                                                         </td>
                                                         
                                                         
@@ -276,7 +276,7 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'VACACIONES').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -416,16 +416,16 @@
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
+                                                <t t-foreach="first.line_ids" t-as="day">
+                                                    <t t-if="day.code == 'VACACIONES'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="int(day.number_of_days)"/> Dias
+                                                            <t t-esc="int(day.quantity)"/> Dias
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.amount)"/>
+                                                            <t t-esc="first.format_amount(day.total)"/>
                                                         </td>
                                                         
                                                         
@@ -440,7 +440,7 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'VACACIONES').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -575,16 +575,16 @@
                             
                                             <tbody>
                                                 <!-- Aquí irán las líneas de la primera tabla -->
-                                                <t t-foreach="first.worked_days_line_ids" t-as="day">
-                                                    <t t-if="day.work_entry_type_id.code == 'VACACIONESL'">
+                                                <t t-foreach="first.line_ids" t-as="day">
+                                                    <t t-if="day.code == 'VACACIONES'">
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: left;">
                                                             <span>Vacaciones</span>
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="int(day.number_of_days)"/> Dias
+                                                            <t t-esc="int(day.quantity)"/> Dias
                                                         </td>
                                                         <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
-                                                            <t t-esc="first.format_amount(day.amount)"/>
+                                                            <t t-esc="first.format_amount(day.total)"/>
                                                         </td>
                                                         
                                                         
@@ -599,7 +599,7 @@
                                                         Subotal
                                                     </td>
                                                     <td colspan="2" style="border: 1px solid #ddd; padding: 0.5px; text-align: right; font-weight: bold;">
-                                                        <t t-esc="first.format_amount(sum(first.worked_days_line_ids.filtered(lambda l: l.work_entry_type_id.is_leave).mapped('amount')))"/>
+                                                        <t t-esc="first.format_amount(sum(first.line_ids.filtered(lambda l: l.code == 'VACACIONES').mapped('total')))"/>
                                                     </td>
                                                 </tr>
                                             </tfoot>
