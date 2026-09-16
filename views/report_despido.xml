@@ -1,0 +1,166 @@
+<odoo>
+
+<template id="report_dismissal_notification">
+
+    <t t-call="web.html_container">
+        <t t-foreach="docs" t-as="o">
+
+            <t t-call="web.basic_layout">
+
+                <div class="page" style="padding: 60px 60px; font-size: 14px;">
+
+                    <!-- Logo -->
+                    <div style="text-align:center; margin-bottom: 30px;">
+
+                        <img t-if="o.company_id.logo" t-att-src="image_data_uri(o.company_id.logo)" style="max-height: 120px; max-width: 300px;"/>
+
+                    </div>
+                    <t t-set="report_date" t-value="context_timestamp(datetime.datetime.now())"/>
+
+                    <!-- Fecha -->
+                    <div style="text-align: right;">
+                        Luque,
+                        <span t-esc="report_date.day"/>
+                        de
+                        <span t-esc="{
+                            1: 'Enero',
+                            2: 'Febrero',
+                            3: 'Marzo',
+                            4: 'Abril',
+                            5: 'Mayo',
+                            6: 'Junio',
+                            7: 'Julio',
+                            8: 'Agosto',
+                            9: 'Septiembre',
+                            10: 'Octubre',
+                            11: 'Noviembre',
+                            12: 'Diciembre'
+                        }[report_date.month]"/>
+                        de
+                        <span t-esc="report_date.year"/>
+                    </div>
+
+                    <!-- Destinatario -->
+                    <p style="margin-top: 40px;">
+                        Señor/a:
+                    </p>
+
+                    <p>
+                        <strong>
+                            <span t-esc="o.name"/>
+                        </strong>
+                    </p>
+
+                    <br/>
+                    <br/>
+
+                    <!-- Asunto -->
+                    <p>
+                        <strong>
+                            Asunto: NOTIFICACIÓN POR DESPIDO SIN JUSTA CAUSA
+                        </strong>
+                    </p>
+
+                    <br/>
+
+                    <!-- Cuerpo -->
+                    <p style="text-align: justify; line-height: 2;">
+
+                        Me dirijo a usted a fin de comunicarle
+                        que la empresa <strong>NEO VENTURES S.A.</strong>
+                        ha resuelto prescindir de sus servicios sin
+                        justa causa desde la fecha
+
+                        <strong>
+                            <span t-if="o.departure_date" t-esc="o.departure_date.strftime('%d/%m/%Y')"/>
+                        </strong>.
+
+                    </p>
+
+                    <p style="text-align: justify; line-height: 2;">
+
+                        La liquidación final de haberes y
+                        beneficios correspondientes se encontrará
+                        a disposición en la oficina de Gestión de
+                        Personas a partir de la fecha
+
+                        <strong>
+                            <span t-if="o.departure_date" t-esc="o.departure_date.strftime('%d/%m/%Y')"/>
+                        </strong>.
+
+                    </p>
+
+                    <p style="margin-top: 30px;">
+                        Atentamente. -
+                    </p>
+
+                    <br/>
+                    <br/>
+                    <br/>
+                    <br/>
+
+                    <!-- Firma -->
+                    <div style="text-align:center;">
+
+                        _________________________________
+                        <br/>
+                        <br/>
+
+                        <span>
+                            Gestión de Personas
+                        </span>
+
+                        <br/>
+
+                        <span>
+                            NEO VENTURES S.A.
+                        </span>
+
+                    </div>
+
+                    <br/>
+                    <br/>
+                    <br/>
+                    <br/>
+
+                    <!-- Recepción -->
+                    <p>
+                        Recibí Conforme:
+                        ___________________________________
+                    </p>
+
+                    <br/>
+
+                    <p>
+                        Aclaración de Firma:
+                        _________________________________
+                    </p>
+
+                    <br/>
+
+                    <p>
+                        Fecha:
+                        ____/____/____
+                    </p>
+
+                </div>
+
+            </t>
+
+        </t>
+    </t>
+
+
+</template>
+
+
+<record id="action_report_dismissal_notification" model="ir.actions.report">
+    <field name="name">Notificación por Despido</field>
+    <field name="model">hr.employee</field>
+    <field name="report_type">qweb-pdf</field>
+    <field name="report_name">hr_holiday_attendance_views.report_dismissal_notification</field>
+    <field name="print_report_name">'Notificacion_Despido_%s' % object.name</field>
+</record>
+
+
+</odoo>

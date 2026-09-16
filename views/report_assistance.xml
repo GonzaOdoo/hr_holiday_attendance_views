@@ -61,16 +61,26 @@
                     </div>
 
                     <!-- Obtenemos las asistencias del payslip actual -->
-                    <t t-set="all_attendances" t-value="doc._get_attendance_by_payslip().get(doc, doc.env['hr.attendance'])"/>
-            
+                    <!--<t t-set="all_attendances" t-value="doc._get_attendance_by_payslip().get(doc, doc.env['hr.attendance'])"/>-->
+                    <t t-set="attendance_data"
+                       t-value="doc._get_attendance_report_data()"/>
+                    
+                    <t t-set="attendances_by_date"
+                       t-value="attendance_data['attendances_by_date']"/>
+                    
+                    <t t-set="vacation_dates"
+                       t-value="attendance_data['vacation_dates']"/>
+                    
+                    <t t-set="vacation_days"
+                       t-value="attendance_data['vacation_days']"/>
                     <!-- Agrupamos asistencias por fecha: fecha -> lista de asistencias -->
-                    <t t-set="attendances_by_date" t-value="{att.check_in.date(): [] for att in all_attendances}"/>
+                    <!--<t t-set="attendances_by_date" t-value="{att.check_in.date(): [] for att in all_attendances}"/>
                     <t t-foreach="all_attendances" t-as="att">
                         <t t-set="date_key" t-value="att.check_in.date()"/>
                         <t t-set="current_list" t-value="attendances_by_date[date_key] if date_key in attendances_by_date else []"/>
                         <t t-set="attendances_by_date" t-value="attendances_by_date.update({date_key: current_list + [att]}) or attendances_by_date"/>
                     </t>
-            
+                    -->
 
                     <table class="table table-bordered table-sm" style="font-size: 12px; margin-bottom: 0;">
                         <thead>
@@ -130,7 +140,7 @@
                         </div>
                         
                         <!-- Other Inputs (Deducciones) -->
-                        <t t-set="total_deductions" t-value="sum(doc.input_line_ids.filtered(lambda l: l.code in ['GUARD_DIURNA', 'GUARD_NOCHE', 'PENALTY', 'ADVANCE']).mapped('amount'))"/>
+                        <t t-set="total_deductions" t-value="sum(doc.input_line_ids.filtered(lambda l: l.code in ['GUARD_DIURNA', 'GUARD_NOCHE', 'PENALTY', 'ADVANCE','GUARD_ASIG']).mapped('guard_amount'))"/>
                         <div class="summary-item">
                             <span class="summary-label">Guardias:</span>
                             <span class="summary-value" t-esc="'{:,.0f}'.format(total_deductions)"/>
@@ -149,7 +159,12 @@
                             <span class="summary-label">Reposos :</span>
                             <span class="summary-value" t-esc="round(total_personal_days, 2)"/> días
                         </div>
-                        
+                        <div class="summary-item">
+                            <span class="summary-label">Vacaciones:</span>
+                            <span class="summary-value"
+                                  t-esc="round(vacation_days, 2)"/>
+                            días
+                        </div>
                         
                     </div>
                     <!-- ======================================== -->

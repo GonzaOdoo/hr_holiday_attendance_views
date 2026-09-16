@@ -1,0 +1,130 @@
+<odoo>
+
+<template id="report_work_certificate">
+
+    <t t-call="web.html_container">
+        <t t-foreach="docs" t-as="o">
+
+            <t t-call="web.basic_layout">
+
+                <div class="page" style="padding: 60px 60px; font-size: 14px;">
+
+                    <!-- Logo -->
+                    <div style="text-align:center; margin-bottom: 30px;">
+
+                        <img t-if="o.company_id.logo"
+                             t-att-src="image_data_uri(o.company_id.logo)"
+                             style="max-height: 120px; max-width: 300px;"/>
+
+                    </div>
+
+                    <!-- Título -->
+                    <h2 style="text-align:center; margin-top: 30px; margin-bottom: 50px;">
+                        CERTIFICADO DE TRABAJO
+                    </h2>
+
+                    <!-- Cuerpo -->
+                    <p style="text-align: justify; line-height: 2;">
+
+                        Certificamos que el
+                        <span t-esc="'Sr.' if o.gender == 'male' else 'Sra.' if o.gender == 'female' else 'Sr./Sra.'"/>
+                        <strong>
+                            <span t-esc="o.name"/>
+                        </strong>,
+                        con cédula de identidad
+                        <strong>
+                            N°
+                            <span t-esc="o.identification_id or ''"/>
+                        </strong>,
+                        se desempeñó en la empresa
+                        <strong>
+                            <span t-esc="o.company_id.name"/>
+                        </strong>
+                        como
+                        <strong>
+                            <span t-esc="o.job_id.name or ''"/>
+                        </strong>,
+                        desde el
+                        <strong> <span t-if="o.first_contract_date" t-esc="o.first_contract_date.strftime('%d/%m/%Y')"/> </strong>
+                        hasta el
+                        <strong> <span t-if="o.departure_date" t-esc="o.departure_date.strftime('%d/%m/%Y')"/> </strong>.-
+
+                    </p>
+
+                    <br/>
+
+                    <!-- Fecha del certificado --> 
+                    <t t-set="certificate_date" t-value="context_timestamp(datetime.datetime.now())"/> 
+                    <p style="text-align: justify; line-height: 2;"> Se expide el presente certificado para los fines que hubiere lugar, en la ciudad de Luque al día 
+                        <strong> 
+                        <span t-esc="certificate_date.day"/> 
+                    </strong> del mes <strong> <span t-esc="{ 1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre' }[certificate_date.month]"/> 
+                    </strong> del 
+                        <strong> 
+                            <span t-esc="certificate_date.year"/> 
+                        </strong>.- 
+                    </p>
+
+                    <br/>
+                    <br/>
+
+                    <p>
+                        Atte. -
+                    </p>
+
+                    <br/>
+                    <br/>
+                    <br/>
+                    <br/>
+                    <br/>
+
+                    <!-- Firma -->
+                    <div style="text-align:center;">
+
+                        ______________________________________________
+                        <br/>
+                        <br/>
+
+                        <strong>
+                            <span t-esc="o.company_id.name"/>
+                        </strong>
+
+                    </div>
+
+                    <br/>
+                    <br/>
+
+                    <!-- Dirección -->
+                    <div style="text-align:center;">
+
+                        <strong>
+                            <span t-esc="o.company_id.name"/>
+                        </strong>
+
+                        <br/>
+
+                        Dirección:
+                        <span t-esc="o.company_id.street or ''"/>
+
+                    </div>
+
+                </div>
+
+            </t>
+
+        </t>
+    </t>
+
+</template>
+
+
+<record id="action_report_work_certificate" model="ir.actions.report">
+    <field name="name">Certificado de Trabajo</field>
+    <field name="model">hr.employee</field>
+    <field name="report_type">qweb-pdf</field>
+    <field name="report_name">hr_holiday_attendance_views.report_work_certificate</field>
+    <field name="print_report_name">'Certificado_Trabajo_%s' % object.name</field>
+</record>
+```
+
+</odoo>

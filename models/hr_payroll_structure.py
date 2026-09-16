@@ -7,6 +7,7 @@ class PayrollStructure(models.Model):
 
     is_final_liquidation = fields.Boolean('Es liquidación final')
     is_holiday_liquidation = fields.Boolean('Liqudación de vacaciones')
+    is_aguinaldo = fields.Boolean('Aguinaldo')
 
 class Payslip(models.Model):
     _inherit = 'hr.payslip'

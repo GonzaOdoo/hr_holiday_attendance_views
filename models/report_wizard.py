@@ -8,7 +8,11 @@ _logger = logging.getLogger(__name__)
 class HrPayrollReport(models.Model):
     _name = 'hr.payroll.report.wizard'
 
-    lote = fields.Many2one('hr.payslip.run')
+    lote = fields.Many2many(
+        'hr.payslip.run',
+        string='Lotes'
+    )
+
     slips = fields.Many2many(
         'hr.payslip',
         string='Recibos de Nómina',
@@ -27,14 +31,25 @@ class HrPayrollReport(models.Model):
     @api.onchange('lote')
     def _onchange_lote(self):
         if self.lote:
-            self.slips = self.lote.slip_ids
+            slips = self.env['hr.payslip']
+    
+            for lote in self.lote:
+                slips |= lote.slip_ids
+    
+            self.slips = slips
         else:
-            self.slips = [(5, 0, 0)]  # Elimina todos
-
-    @api.depends('lote')
+            self.slips = [(5, 0, 0)]
+    
+    
+    @api.depends('lote', 'lote.slip_ids')
     def _compute_available_slips(self):
         for wizard in self:
-            wizard.available_slip_ids = wizard.lote.slip_ids
+            slips = self.env['hr.payslip']
+    
+            for lote in wizard.lote:
+                slips |= lote.slip_ids
+    
+            wizard.available_slip_ids = slips
 
     def generate_ips_text(self):
         """
@@ -66,10 +81,13 @@ class HrPayrollReport(models.Model):
             # Obtener salario imponible (GROSS) y neto (NET)
             imponible = 0
             real = 0
+            dias = 30
             for line in record.line_ids:
+                if line.code == 'BASIC':
+                    dias = line.quantity
                 if line.code == 'GROSS':
                     imponible = line.amount
-                elif line.code == 'NET':
+                if line.code == 'NET':
                     real = line.amount
     
             # Validaciones básicas
@@ -77,36 +95,34 @@ class HrPayrollReport(models.Model):
                 raise UserError(f"Empleado {employee.name} no tiene número de cédula.")
     
             # === Campos del formato IPS ===
-            numero_patronal = company.ips.replace('-', '')  # ← Reemplaza con valor real desde compañía
-            fake_patronal = '0002821075'
-            numero_asegurado = company.mtess  # ← Puede venir del contrato o empleado
-    
-            # Formateo de campos con ancho fijo
-            cedula = str(employee.identification_id or "").strip()[:10].ljust(10)
-            apellidos = str(employee.legal_name or employee.legal_name.split()[-1] if employee.legal_name else "").strip()[:30].ljust(30)
-            nombres = str(employee.legal_last_name or " ".join(employee.legal_last_name.split()[:-1]) if employee.legal_last_name else "").strip()[:30].ljust(30)
-            categoria = "E".ljust(1)  # E = Empleado activo
-            dias_trabajados = "30".zfill(2)  # Puedes calcularlo si tienes datos
-            salario_imponible = str(int(imponible)).rjust(10)
-            mes_y_anio = f"{record.date_to.month:02d}{record.date_to.year}"  # MMYYYY
-            codigo_movimiento = "".ljust(2)
-            salario_real = str(int(imponible)).rjust(10)
-    
-            # Construir línea
+            numero_patronal = str(company.ips or '').replace('-', '').strip()
+            numero_asegurado = str(employee.mtess_patronal or '').strip()
+            cedula = str(employee.identification_id or '').strip()
+            
+            apellido = str(employee.legal_name or '').strip()
+            nombre = str(employee.legal_last_name or '').strip()
+            
+            categoria = 'E'
+            dias_trabajados = str(int(dias))
+            
+            salario_imponible = str(int(imponible))
+            mes_anio = f"{record.date_from.month}{record.date_from.year}".rjust(6)
+            codigo_actividad = '0'
+            salario_real = str(int(real))
+            
             line = (
-                fake_patronal.ljust(10) +
-                numero_asegurado.ljust(10,'0') +
+                numero_patronal.ljust(15) +
+                numero_asegurado.ljust(9) +
                 cedula +
-                nombres +
-                apellidos +
+                apellido.rjust(30) +
+                nombre.rjust(30) +
                 categoria +
-                dias_trabajados +
-                salario_imponible +
-                mes_y_anio.ljust(6) +
-                codigo_movimiento +
-                salario_real
+                dias_trabajados.rjust(2) +
+                salario_imponible.rjust(10) +
+                mes_anio.rjust(6) +
+                codigo_actividad.rjust(2) +
+                salario_real.rjust(10)
             )
-    
             lines.append(line)
     
         # Generar contenido
@@ -158,7 +174,7 @@ class HrPayrollReport(models.Model):
             debito =  str(employee.company_id.bank_ids[0].acc_number)
             concepto = "15"
             salario_imponible = f"{imponible:010.2f}" # Ej: 000150000 → 1500.00
-            aguinaldo = f"NO"  # MMYYYY
+            aguinaldo = f"SI" if record.struct_id.is_aguinaldo else f"NO" # MMYYYY
             if not record.paid_date:
                 raise UserError(f"Debe establecer una fecha de pago/cierre en el recibo: {record.name} del empleado: {record.employee_id.name}")
             fecha_pago = record.paid_date
@@ -172,13 +188,14 @@ class HrPayrollReport(models.Model):
                 6: "domingo"
             }
             nombre_dia = dias_semana[fecha_pago.weekday()] if fecha_pago else '0'
-            fecha_formateada = f"{fecha_pago.day:02d}/{fecha_pago.month:02d}/{nombre_dia}" if fecha_pago else '0'
+            fecha_formateada = f"{fecha_pago.day:02d}/{fecha_pago.month:02d}/{fecha_pago.year}" if fecha_pago else '0'
             line = (
                 '"' + ci + '"' + "," +
                 '"' + debito + '"' + "," +
                 '"' + concepto + '"' + "," +
                 '"' + salario_imponible + '"' + "," +
                 '"' + aguinaldo + '"' + "," +
+                '""' + "," +
                 '"' + fecha_formateada + '"'
             )
             lines.append(line)

@@ -1294,3 +1294,87 @@ class HrContract(models.Model):
             current_day -= timedelta(days=1)
     
         return False
+
+    def _get_attendance_report_data(self):
+        self.ensure_one()
+    
+        attendance_model = self.env['hr.attendance']
+    
+        # ---------------------------------------------------------
+        # Asistencias del período del recibo
+        # ---------------------------------------------------------
+        all_attendances = self._get_attendance_by_payslip().get(
+            self,
+            attendance_model,
+        )
+    
+        # ---------------------------------------------------------
+        # Buscar recibos de vacaciones que se crucen con este período
+        # ---------------------------------------------------------
+        vacation_slips = self.env['hr.payslip'].search([
+            ('employee_id', '=', self.employee_id.id),
+            ('id', '!=', self.id),
+            ('struct_id.is_holiday_liquidation', '=', True),
+            ('date_from', '<=', self.date_to),
+            ('date_to', '>=', self.date_from),
+        ])
+    
+        # ---------------------------------------------------------
+        # Fechas de vacaciones
+        # ---------------------------------------------------------
+        vacation_dates = set()
+    
+        for vacation_slip in vacation_slips:
+            current_date = max(
+                vacation_slip.date_from,
+                self.date_from,
+            )
+            end_date = min(
+                vacation_slip.date_to,
+                self.date_to,
+            )
+    
+            while current_date <= end_date:
+                vacation_dates.add(current_date)
+                current_date += timedelta(days=1)
+    
+        # ---------------------------------------------------------
+        # Agrupar asistencias por fecha,
+        # PERO IGNORANDO completamente las vacaciones
+        # ---------------------------------------------------------
+        attendances_by_date = {}
+    
+        for attendance in all_attendances:
+            if not attendance.check_in:
+                continue
+    
+            date_key = attendance.check_in.date()
+    
+            # Si el día es vacaciones, NO mostramos ninguna
+            # marcación aunque exista.
+            if date_key in vacation_dates:
+                continue
+    
+            attendances_by_date.setdefault(date_key, []).append(attendance)
+    
+        # Ordenar las asistencias de cada día
+        for date_key in attendances_by_date:
+            attendances_by_date[date_key] = sorted(
+                attendances_by_date[date_key],
+                key=lambda a: a.check_in,
+            )
+    
+        # ---------------------------------------------------------
+        # Cantidad de vacaciones que figura en el recibo normal
+        # ---------------------------------------------------------
+        vacation_days = sum(
+            self.worked_days_line_ids
+            .filtered(lambda line: line.code == 'VACACIONESL')
+            .mapped('number_of_days')
+        )
+    
+        return {
+            'attendances_by_date': attendances_by_date,
+            'vacation_dates': vacation_dates,
+            'vacation_days': vacation_days,
+        }

@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <form string="Generar Reporte de Nómina">
                 <group>
-                    <field name="lote" on_change="1"/>
+                    <field name="lote" widget="many2many_tags" on_change="1"/>
                     <field name="report_type"/>
                 </group>
                 <group string="Recibos de Nómina">
