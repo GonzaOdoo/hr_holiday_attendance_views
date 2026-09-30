@@ -1378,3 +1378,342 @@ class HrContract(models.Model):
             'vacation_dates': vacation_dates,
             'vacation_days': vacation_days,
         }
+
+
+    def generate_payslip_pivot_excel_report_new(self):
+        if not self:
+            return
+    
+        _logger.info("Ejecutando reporte de nómina pivotado")
+    
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+        worksheet = workbook.add_worksheet('Nómina por Concepto')
+    
+        # ============================================================
+        # CONFIGURACIÓN
+        # ============================================================
+    
+        # Conceptos que deben mostrar:
+        #   - Cantidad / Valor
+        #   - Monto
+        #
+        # El resto solamente muestra el monto.
+        VALUE_AND_AMOUNT_CODES = {
+            'BASIC',
+            'LATE',
+            'GUARD_ASIG',
+            'GUARD_ASIG_NOCHE',
+            'HEX50',
+            'HNOC30',
+            'AUSENCIA_NJ',
+            'DESC_TIEMPO_PERSONAL',
+            'RECARGON',
+        }
+    
+        # ============================================================
+        # FORMATOS
+        # ============================================================
+    
+        header_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#16365C',
+            'font_color': 'white',
+            'border': 1,
+        })
+    
+        text_format = workbook.add_format({
+            'border': 1,
+            'align': 'left',
+        })
+    
+        amount_format = workbook.add_format({
+            'num_format': '#,##0.00',
+            'border': 1,
+            'align': 'right',
+        })
+    
+        date_format = workbook.add_format({
+            'num_format': 'dd/mm/yyyy',
+            'border': 1,
+        })
+    
+        title_format = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'left',
+        })
+    
+        # ============================================================
+        # TÍTULO
+        # ============================================================
+    
+        current_row = 0
+    
+        worksheet.write(
+            current_row,
+            0,
+            'Reporte de Nómina - Formato Pivotado',
+            title_format
+        )
+    
+        current_row += 2
+    
+        # ============================================================
+        # CONCEPTOS
+        # ============================================================
+    
+        # Todos los conceptos existentes en los recibos.
+        #
+        # Se agrupan por código para evitar repetir columnas si
+        # diferentes recibos tienen el mismo concepto.
+        concepts = {}
+    
+        for line in self.mapped('line_ids'):
+            if not line.code:
+                continue
+    
+            if line.code not in concepts:
+                concepts[line.code] = {
+                    'name': line.name,
+                    'sequence': line.sequence if line.sequence is not None else 99999,
+                    'with_value': line.code in VALUE_AND_AMOUNT_CODES,
+                }
+    
+        # Ordenar por secuencia
+        sorted_concepts = sorted(
+            concepts.items(),
+            key=lambda item: item[1]['sequence']
+        )
+    
+        # ============================================================
+        # COLUMNAS DINÁMICAS
+        # ============================================================
+    
+        dynamic_headers = []
+        code_to_col_info = {}
+    
+        col_index = 0
+    
+        for code, info in sorted_concepts:
+    
+            if info['with_value']:
+                dynamic_headers.append(f"{info['name']} (Valor)")
+                dynamic_headers.append(f"{info['name']} (Monto)")
+    
+                code_to_col_info[code] = {
+                    'value_col': col_index,
+                    'amount_col': col_index + 1,
+                    'with_value': True,
+                }
+    
+                col_index += 2
+    
+            else:
+                dynamic_headers.append(info['name'])
+    
+                code_to_col_info[code] = {
+                    'amount_col': col_index,
+                    'with_value': False,
+                }
+    
+                col_index += 1
+    
+        # ============================================================
+        # CABECERAS
+        # ============================================================
+    
+        fixed_headers = [
+            'Empleado',
+            'N° Recibo',
+            'Fecha Desde',
+            'Fecha Hasta',
+        ]
+    
+        final_headers = fixed_headers + dynamic_headers + [
+            'Total Neto',
+            'Estado',
+        ]
+    
+        for col, header in enumerate(final_headers):
+            worksheet.write(
+                current_row,
+                col,
+                header,
+                header_format
+            )
+    
+        current_row += 1
+    
+        # ============================================================
+        # DATOS
+        # ============================================================
+    
+        for slip in self:
+    
+            row_data = [
+                slip.employee_id.name or '',
+                slip.number or '',
+                slip.date_from,
+                slip.date_to,
+            ]
+    
+            # --------------------------------------------------------
+            # Diccionario de líneas salariales
+            # --------------------------------------------------------
+    
+            salary_lines = {
+                line.code: line
+                for line in slip.line_ids
+                if line.code
+            }
+    
+            # --------------------------------------------------------
+            # Conceptos
+            # --------------------------------------------------------
+    
+            for code, info in sorted_concepts:
+    
+                line = salary_lines.get(code)
+    
+                if info['with_value']:
+    
+                    # Valor / cantidad
+                    quantity = line.quantity if line else 0.0
+    
+                    # Monto
+                    amount = line.total if line else 0.0
+    
+                    row_data.append(quantity)
+                    row_data.append(amount)
+    
+                else:
+    
+                    # Solamente monto
+                    amount = line.total if line else 0.0
+    
+                    row_data.append(amount)
+    
+            # --------------------------------------------------------
+            # Total neto
+            # --------------------------------------------------------
+    
+            net_line = salary_lines.get('NET')
+            net_amount = net_line.total if net_line else 0.0
+    
+            row_data.append(net_amount)
+    
+            # --------------------------------------------------------
+            # Estado
+            # --------------------------------------------------------
+    
+            state_label = dict(
+                slip._fields['state'].selection
+            ).get(
+                slip.state,
+                slip.state
+            )
+    
+            row_data.append(state_label)
+    
+            # --------------------------------------------------------
+            # Escribir fila
+            # --------------------------------------------------------
+    
+            for col, value in enumerate(row_data):
+    
+                if isinstance(value, (date, datetime)):
+                    worksheet.write(
+                        current_row,
+                        col,
+                        value,
+                        date_format
+                    )
+    
+                elif isinstance(value, (float, int)):
+                    worksheet.write(
+                        current_row,
+                        col,
+                        value,
+                        amount_format
+                    )
+    
+                else:
+                    worksheet.write(
+                        current_row,
+                        col,
+                        str(value) if value != "" else "",
+                        text_format
+                    )
+    
+            current_row += 1
+    
+        # ============================================================
+        # ANCHOS
+        # ============================================================
+    
+        worksheet.set_column('A:A', 25)
+        worksheet.set_column('B:B', 15)
+        worksheet.set_column('C:D', 12)
+        worksheet.set_column('E:ZZ', 18)
+    
+        # ============================================================
+        # GENERAR ARCHIVO
+        # ============================================================
+    
+        workbook.close()
+        output.seek(0)
+    
+        file_data = base64.b64encode(output.read())
+        output.close()
+    
+        # ============================================================
+        # NOMBRE DEL ARCHIVO
+        # ============================================================
+    
+        if len(self) == 1:
+            date_str = (
+                self.date_from.strftime('%Y%m%d')
+                if self.date_from
+                else 'sin_fecha'
+            )
+    
+            filename = (
+                f"Recibo_Pivot_"
+                f"{self.number or 'SIN_NUMERO'}_"
+                f"{date_str}.xlsx"
+            )
+    
+        else:
+            date_str = fields.Date.today().strftime('%Y%m%d')
+    
+            filename = (
+                f"Nomina_Pivot_"
+                f"{len(self)}_registros_"
+                f"{date_str}.xlsx"
+            )
+    
+        # ============================================================
+        # ADJUNTO
+        # ============================================================
+    
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': file_data,
+            'mimetype': (
+                'application/vnd.openxmlformats-officedocument'
+                '.spreadsheetml.sheet'
+            ),
+            'res_model': self._name,
+            'res_id': self.id if len(self) == 1 else False,
+            'public': False,
+        })
+    
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f'/web/content/{attachment.id}?download=true',
+            'target': 'self',
+        }
