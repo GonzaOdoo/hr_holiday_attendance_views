@@ -148,18 +148,28 @@ class HrContract(models.Model):
                         and (not a.other_input_type_id.struct_ids or slip.struct_id in a.other_input_type_id.struct_ids)
                 )
                 _logger.info(valid_attachments)
-                # Only take deduction types present in structure
-                for input_type_id, attachments in valid_attachments.grouped("other_input_type_id").items():
-                    amount = attachments._get_active_amount()
-                    name = ', '.join(attachments.mapped('description'))
-                    
+                for attachment in valid_attachments:
+                    amount = attachment._get_active_amount()
+                
                     input_line_vals.append(Command.create({
-                        'name': name,
+                        'name': attachment.description,
                         'amount': amount if not slip.credit_note else -amount,
-                        'input_type_id': input_type_id.id,
-                        'guard_amount': sum(attachments.mapped('guard_amount')),
+                        'input_type_id': attachment.other_input_type_id.id,
+                        'guard_amount': attachment.guard_amount,
                     }))
                     _logger.info(input_line_vals)
+                # Only take deduction types present in structure
+                #for input_type_id, attachments in valid_attachments.grouped("other_input_type_id").items():
+                #    amount = attachments._get_active_amount()
+                #    name = ', '.join(attachments.mapped('description'))
+                #    
+                #    input_line_vals.append(Command.create({
+                #        'name': name,
+                #        'amount': amount if not slip.credit_note else -amount,
+                #        'input_type_id': input_type_id.id,
+                #        'guard_amount': sum(attachments.mapped('guard_amount')),
+                #    }))
+                    
                 slip.update({'input_line_ids': input_line_vals})
                 _logger.info(
                     "INPUTS GENERADOS: %s",
@@ -192,9 +202,10 @@ class HrContract(models.Model):
         self.ensure_one()
         res = []
         hours_per_day = self._get_worked_day_lines_hours_per_day()
-        work_hours = self.contract_id.get_work_hours(self.date_from_events, self.date_to_events, domain=domain)
+        work_hours = self.contract_id.get_work_hours(self.date_from, self.date_to, domain=domain)
         work_hours_ordered = sorted(work_hours.items(), key=lambda x: x[1])
         _logger.info("Horas de trabajo!")
+        _logger.info("Nuevas horas!")
         _logger.info(work_hours_ordered)
         biggest_work = work_hours_ordered[-1][0] if work_hours_ordered else 0
         add_days_rounding = 0

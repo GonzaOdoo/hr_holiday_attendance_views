@@ -3,6 +3,7 @@
     <!-- Plantilla principal del informe -->
     <template id="report_payslip_two_per_page">
       <t t-call="web.html_container">
+      <t t-call="web.html_container">
             <t t-call="web.basic_layout">
                 <style>
                     .page {
@@ -133,6 +134,13 @@
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
+                                                            <t t-elif="line.code == 'RECARGON' and day.code == 'RECARGON'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
                                                         </t>
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
@@ -211,6 +219,8 @@
                                                 <t t-esc="first.format_amount(line.total)"/>
                                             </t>
                                         </p>
+                                    <t t-if="first.line_ids.filtered(lambda l: l.code == 'GND')"> <p style="margin: 0.5px 0; font-size: 10px;"> <strong>Gourmet card:</strong> <t t-foreach="first.line_ids.filtered(lambda l: l.code == 'GND')" t-as="line"> <t t-esc="first.format_amount(line.total)"/> </t> </p> </t>
+                                        
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
@@ -336,6 +346,13 @@
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
+                                                            <t t-elif="line.code == 'RECARGON' and day.code == 'RECARGON'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
                                                         </t>
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
@@ -414,6 +431,8 @@
                                                 <t t-esc="first.format_amount(line.total)"/>
                                             </t>
                                         </p>
+                                    <t t-if="first.line_ids.filtered(lambda l: l.code == 'GND')"> <p style="margin: 0.5px 0; font-size: 10px;"> <strong>Gourmet card:</strong> <t t-foreach="first.line_ids.filtered(lambda l: l.code == 'GND')" t-as="line"> <t t-esc="first.format_amount(line.total)"/> </t> </p> </t>
+
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
@@ -544,6 +563,13 @@
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
+                                                            <t t-elif="line.code == 'RECARGON' and day.code == 'RECARGON'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
                                                         </t>
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
@@ -622,6 +648,7 @@
                                                 <t t-esc="first.format_amount(line.amount)"/>
                                             </t>
                                         </p>
+                                    <t t-if="first.line_ids.filtered(lambda l: l.code == 'GND')"> <p style="margin: 0.5px 0; font-size: 10px;"> <strong>Gourmet card:</strong> <t t-foreach="first.line_ids.filtered(lambda l: l.code == 'GND')" t-as="line"> <t t-esc="first.format_amount(line.total)"/> </t> </p> </t>
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
@@ -747,6 +774,13 @@
                                                                     <t t-set="day_found" t-value="True"/>
                                                                 </td>
                                                             </t>
+                                                            <t t-elif="line.code == 'RECARGON' and day.code == 'RECARGON'">
+                                                                <td style="border: 1px solid #ddd; padding: 0.5px; text-align: right;">
+                                                                    <t t-esc="'{:.2f}'.format(day.number_of_hours)"/>
+                                                                     <span> Horas</span>
+                                                                    <t t-set="day_found" t-value="True"/>
+                                                                </td>
+                                                            </t>
                                                         </t>
                                                         <t t-foreach="first.input_line_ids" t-as="input">
                                                             <t t-if="line.code == 'GUARD_ASIG' and input.code == 'GUARD_DIURNA'">
@@ -825,6 +859,7 @@
                                                 <t t-esc="first.format_amount(line.total)"/>
                                             </t>
                                         </p>
+                                    <t t-if="first.line_ids.filtered(lambda l: l.code == 'GND')"> <p style="margin: 0.5px 0; font-size: 10px;"> <strong>Gourmet card:</strong> <t t-foreach="first.line_ids.filtered(lambda l: l.code == 'GND')" t-as="line"> <t t-esc="first.format_amount(line.total)"/> </t> </p> </t>
                                 </div>
                                 <div class="row" style="margin-top:5px">
                                     <div class="col-4">
