@@ -203,6 +203,39 @@ class HrContract(models.Model):
         res = []
         hours_per_day = self._get_worked_day_lines_hours_per_day()
         work_hours = self.contract_id.get_work_hours(self.date_from, self.date_to, domain=domain)
+
+        # Período de novedades
+        # ============================================================
+        events_work_hours = {}
+        
+        if self.date_from_events and self.date_to_events:
+            events_work_hours = self.contract_id.get_work_hours(
+                self.date_from_events,
+                self.date_to_events,
+                domain=domain
+            )
+        # ============================================================
+        # Reemplazar solamente los tipos que NO sean IPS
+        # ============================================================
+        work_entry_type_ids = set(work_hours.keys()) | set(events_work_hours.keys())
+        
+        for work_entry_type_id in work_entry_type_ids:
+            work_entry_type = self.env['hr.work.entry.type'].browse(
+                work_entry_type_id
+            )
+        
+            # IPS = usa siempre el período normal
+            if work_entry_type.external_code == 'IPS':
+                continue
+        
+            # El resto usa el período de novedades
+            if work_entry_type_id in events_work_hours:
+                work_hours[work_entry_type_id] = events_work_hours[work_entry_type_id]
+            else:
+                # Si no existe en novedades, significa que no tuvo horas
+                # en ese período, por lo que eliminamos las del período normal.
+                work_hours.pop(work_entry_type_id, None)
+        
         work_hours_ordered = sorted(work_hours.items(), key=lambda x: x[1])
         _logger.info("Horas de trabajo!")
         _logger.info("Nuevas horas!")
