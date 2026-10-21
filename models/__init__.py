@@ -18,3 +18,5 @@ from . import libros_laborales
 from . import hr_payroll_structure
 from . import hr_employee
 from . import hr_shift_change_wizard
+from . import hr_departure_wizard
+from . import hr_departure_payslip

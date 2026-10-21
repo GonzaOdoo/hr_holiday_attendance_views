@@ -1761,3 +1761,28 @@ class HrContract(models.Model):
             'url': f'/web/content/{attachment.id}?download=true',
             'target': 'self',
         }
+
+
+
+    def action_print_payslip_report(self):
+        self.ensure_one()
+
+        report_ref = (
+            'hr_holiday_attendance_views.'
+            'action_report_payslip_two_per_page'
+        )
+
+        return self.env.ref(report_ref).report_action(self)
+
+    def action_print_payslip_report_batch(self):
+        slips = self.browse(
+            self.env.context.get('active_ids', [])
+        ).exists()
+
+        if not slips:
+            slips = self
+
+        return self.env.ref(
+            'hr_holiday_attendance_views.'
+            'action_report_payslip_two_per_page'
+        ).report_action(slips)

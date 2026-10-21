@@ -25,6 +25,7 @@
             'views/libros_laborales.xml',
             'views/shift_wizard.xml',
             'views/hr_leave_liquidation_wizard.xml',
+            'views/hr_employee_wizard.xml',
             'security/ir.model.access.csv'],
     "assets": {},
     "license": "LGPL-3",

@@ -1,0 +1,51 @@
+<odoo>
+    
+    <record id="hr_departure_wizard_view_form_inherit" model="ir.ui.view">
+        <field name="name">hr.departure.wizard.form.inherit</field>
+        <field name="model">hr.departure.wizard</field>
+        <field name="inherit_id" ref="hr.hr_departure_wizard_view_form"/>
+        <field name="arch" type="xml">
+    
+            <xpath expr="//field[@name='departure_date']" position="after">
+                <field name="preaviso_date"/>
+            </xpath>
+            <xpath expr="//footer/button[@name='action_register_departure']" position="before">
+                <button
+                    name="action_create_final_liquidation"
+                    type="object"
+                    string="Simular liquidación"
+                    class="btn-primary"
+                />
+            </xpath>
+            <xpath expr="//button[@name='action_register_departure']" position="attributes">
+                <attribute name="invisible">
+                    1
+                </attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="hr_employee_view_form_final_liquidation" model="ir.ui.view">
+        <field name="name">hr.employee.form.final.liquidation</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='departure']" position="attributes">
+                <attribute name="invisible">
+                    active and final_liquidation_status != 'in_process'
+                </attribute>
+            </xpath>
+            <xpath expr="//group[@name='departure']/field[@name='departure_date']" position="after">
+                <field name="preaviso_date"/>
+                <field name="final_payslip_id"/>
+                <field name="final_liquidation_status" readonly="1"/>
+            </xpath>
+            <xpath expr="//form/header" position="inside">
+            <field name="final_liquidation_status"
+                   widget="statusbar"
+                   invisible="final_liquidation_status == 'active'"
+                   readonly="1"/>
+            </xpath>
+            
+        </field>
+    </record>
+</odoo>
