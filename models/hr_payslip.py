@@ -198,6 +198,12 @@ class HrContract(models.Model):
         _logger.info(work_hours)
         return
     
+    def _get_worked_day_lines(self, domain=None, check_out_of_contract=True):
+        return super()._get_worked_day_lines(
+            domain=domain,
+            check_out_of_contract=False,
+        )
+    
     def _get_worked_day_lines_values(self, domain=None):
         self.ensure_one()
         res = []
