@@ -254,11 +254,31 @@ class HrContract(models.Model):
     
         # Determinar día final efectivo para cálculo
         last_day_real = monthrange(payslip_end.year, payslip_end.month)[1]
-        is_full_month_period = (payslip_start.day == 1 and payslip_end.day == last_day_real)
         
-        # Base fija de 30 días para períodos mensuales completos
-        base_days = 30.0 if is_full_month_period else (payslip_end - payslip_start).days + 1
+        is_full_month_period = (
+            payslip_start.day == 1
+            and payslip_end.day == last_day_real
+        )
         
+        # Verificar si el contrato cubre todo el período
+        contract_covers_period = (
+            contract
+            and contract.date_start <= payslip_start
+            and (
+                not contract.date_end
+                or contract.date_end >= payslip_end
+            )
+        )
+        
+        calendar_days = (payslip_end - payslip_start).days + 1
+        
+        # Mes completo trabajado: base 30.
+        # Contrato parcial: utilizar días calendario reales.
+        if is_full_month_period and contract_covers_period:
+            base_days = 30.0
+        else:
+            base_days = float(calendar_days)
+                
         # === Calcular días fuera del contrato (en días calendario reales) ===
         days_outside_contract = 0.0
         
@@ -386,6 +406,7 @@ class HrContract(models.Model):
         # Ordenar y retornar
         work_entry_type = self.env['hr.work.entry.type']
         _logger.info("Return worked days!")
+        _logger.info(sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence))
         return sorted(res, key=lambda d: work_entry_type.browse(d['work_entry_type_id']).sequence)
 
     def _count_work_days(self,employee, date_from, date_to):
