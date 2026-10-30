@@ -218,22 +218,23 @@ class HrContract(models.Model):
         # Reemplazar solamente los tipos que NO sean IPS
         # ============================================================
         work_entry_type_ids = set(work_hours.keys()) | set(events_work_hours.keys())
-        
+
         for work_entry_type_id in work_entry_type_ids:
             work_entry_type = self.env['hr.work.entry.type'].browse(
                 work_entry_type_id
             )
         
-            # IPS = usa siempre el período normal
-            if work_entry_type.external_code == 'IPS':
+            # Mantener el período normal para IPS y asistencia ordinaria.
+            if (
+                work_entry_type.external_code == 'IPS'
+                or work_entry_type.code == 'WORK100'
+            ):
                 continue
         
-            # El resto usa el período de novedades
+            # El resto utiliza el período de novedades.
             if work_entry_type_id in events_work_hours:
                 work_hours[work_entry_type_id] = events_work_hours[work_entry_type_id]
             else:
-                # Si no existe en novedades, significa que no tuvo horas
-                # en ese período, por lo que eliminamos las del período normal.
                 work_hours.pop(work_entry_type_id, None)
         
         work_hours_ordered = sorted(work_hours.items(), key=lambda x: x[1])
