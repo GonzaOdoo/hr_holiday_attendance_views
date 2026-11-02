@@ -9,6 +9,7 @@ import xlsxwriter
 import base64
 import logging
 import calendar
+from odoo.tools import html2plaintext
 _logger = logging.getLogger(__name__)
 
 class LaborReportWizard(models.TransientModel):
@@ -548,10 +549,19 @@ class LaborReportWizard(models.TransientModel):
         company = self.company_id
     
         # Buscar todos los empleados de la compañía
-        employees = self.env['hr.employee'].search([
-            ('company_id', '=', company.id)
+        year = int(self.year)
+
+        employees = self.env['hr.employee'].with_context(
+            active_test=False
+        ).search([
+            ('company_id', '=', company.id),
+            '|',
+            ('active', '=', True),
+            '&',
+            ('departure_date', '>=', date(year, 1, 1)),
+            ('departure_date', '<=', date(year, 12, 31)),
         ])
-    
+            
         if not employees:
             raise UserError("No se encontraron empleados en la compañía %s." % company.name)
     
@@ -579,7 +589,32 @@ class LaborReportWizard(models.TransientModel):
             'CARGO', 'PROFESION', 'FECHAENTRADA', 'HORARIOTRABAJO', 'MENORESCAPA',
             'MENORESESCOLAR', 'FECHASALIDA', 'MOTIVOSALIDA', 'ESTADO'
         ]
-    
+        nationality_map = {
+            'Paraguay': {
+                'male': 'PARAGUAYO',
+                'female': 'PARAGUAYA',
+            },
+            'Argentina': {
+                'male': 'ARGENTINO',
+                'female': 'ARGENTINA',
+            },
+            'Brasil': {
+                'male': 'BRASILEÑO',
+                'female': 'BRASILEÑA',
+            },
+            'Brazil': {
+                'male': 'BRASILEÑO',
+                'female': 'BRASILEÑA',
+            },
+            'Bolivia': {
+                'male': 'BOLIVIANO',
+                'female': 'BOLIVIANA',
+            },
+            'Uruguay': {
+                'male': 'URUGUAYO',
+                'female': 'URUGUAYA',
+            },
+        }
         # Escribir cabeceras
         for col, header in enumerate(headers):
             worksheet.write(0, col, header, header_format)
@@ -594,10 +629,21 @@ class LaborReportWizard(models.TransientModel):
             sexo = 'M' if emp.gender == 'male' else 'F' if emp.gender == 'female' else ''
             estado_civil = self.marital_status(emp.marital or 'single')
             fecha_nac = emp.birthday.strftime('%Y-%m-%d') if emp.birthday else ''
-            nacionalidad = (emp.country_id.name or 'PARAGUAYA').upper()
+            country_name = emp.country_id.name if emp.country_id else ''
+            nacionalidad = (
+                nationality_map.get(country_name, {}).get(emp.gender)
+                or country_name.upper()
+            )
             domicilio = emp.private_street or ''
-            fecha_nac_menor = ''  # ajusta si tienes el campo
-            hijos_menores = emp.children or 0
+            fecha_nac_menor=''
+            fecha_referencia = date(self.year, 12, 31)
+            anio_limite = fecha_referencia.year - 18
+            
+            hijos_menores = sum(
+                1
+                for child in emp.family_child_ids
+                if child.birth_date and child.birth_date.year > anio_limite
+            )
             cargo = emp.job_id.name or ''
             profesion = 'EMPLEADO'  # o usa un campo si lo tienes
             fecha_entrada = emp.first_contract_date.strftime('%Y-%m-%d') if emp.first_contract_date else ''
@@ -605,7 +651,7 @@ class LaborReportWizard(models.TransientModel):
             menores_capa = ''  # ajusta si tienes el campo
             menores_escolar = ''  # ajusta si tienes el campo
             fecha_salida = emp.departure_date.strftime('%Y-%m-%d') if emp.departure_date else ''
-            motivo_salida = emp.departure_description or ''
+            motivo_salida = html2plaintext(emp.departure_description or '').strip()
             estado = 'ACTIVO' if emp.active else 'INACTIVO'
     
             row_data = [
@@ -822,39 +868,67 @@ class LaborReportWizard(models.TransientModel):
             ci = employee.identification_id or ''
             name = employee.name or ''
             work_entries = self.get_work_entries(employee,slip.date_from,slip.date_to)
+            vacation_liquidations = self.env['hr.leave.liquidation'].search([
+                ('employee_id', '=', employee.id),
+                ('date_start', '<=', slip.date_to),
+                ('date_end', '>=', slip.date_from),
+            ])
             _logger.info(work_entries)
             # Rellenar días del mes
             days_data = []
-            current = date_from
-            while current <= date_to:
+            current = slip.date_from
+            
+            while current <= slip.date_to:
+                # Primero se determina el código habitual
                 day_code = get_day_code(work_entries, current)
-                if day_code == '' and current.weekday() == 6:  # 6 = domingo en Python (lunes=0, ..., domingo=6)
+            
+                if day_code == '' and current.weekday() == 6:
                     day_code = 'D'
+            
+                # Después se sobrescribe si el día corresponde a vacaciones
+                is_vacation = any(
+                    liquidation.date_start.date() <= current
+                    and liquidation.date_end.date() >= current
+                    for liquidation in vacation_liquidations
+                )
+            
+                if is_vacation:
+                    day_code = 'V'
+            
                 days_data.append(day_code)
                 current += timedelta(days=1)
             # Obtener montos (ajusta códigos según tu nómina)
             def get_amount(code):
                 line = slip.line_ids.filtered(lambda l: l.code == code)
                 return line[0].amount if line else 0.0
+            def get_total(code):
+                line = slip.line_ids.filtered(lambda l: l.code == code)
+                return line[0].total if line else 0.0
             def get_qty(code):
                 line = slip.worked_days_line_ids.filtered(lambda l: l.code == code)
                 if line.code == 'WORK100':
                     return line[0].number_of_days if line else 0.0
                 return line[0].number_of_hours if line else 0.0
-            salario = get_amount('BASIC')
-            salario_dia = slip.contract_id.wage / 30 if slip.contract_id.wage else 0
+            salario = get_total('BASIC')
+            salario_basic = get_amount('BASIC')
+            
+            salario_dia = (
+                salario_basic
+                if salario_basic
+                else (slip.contract_id.wage / 30 if slip.contract_id.wage else 0)
+            )
             
             he_50_qty = get_qty('OVERTIME_EVENING') or 0
             he_100_qty = get_qty('WORK100') or 0
             hours_worked = he_100_qty * 8
             he_130_qty = get_qty('OVERTIME_NIGHT') or 0
-            he_50_amt = get_amount('HEX50')
-            he_100_amt = get_amount('HNOC30')
-            he_130_amt = get_amount('HNOC30')
+            he_50_amt = get_total('HEX50')
+            he_100_amt = get_total('HNOC30')
+            he_130_amt = get_total('HNOC30')
             
-            vacacion = get_amount('VACACIONES')
-            bonif_fam = get_amount('BONIF_FAMILIAR')
-            aguinaldo = get_amount('AGUINALDO')
+            vacacion = get_total('VACACIONES')
+            bonif_fam = get_total('BONIF_FAMILIAR')
+            aguinaldo = get_total('AGUINALDO')
             otros = 0.0  # o suma de otros beneficios
     
             total_general = get_amount('NET')
